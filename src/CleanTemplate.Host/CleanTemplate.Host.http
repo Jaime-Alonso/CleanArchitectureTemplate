@@ -1,0 +1,34 @@
+@CleanTemplate.Host_HostAddress = http://localhost:5202
+
+GET {{CleanTemplate.Host_HostAddress}}/api/products?page=1&pageSize=10
+Accept: application/json
+
+###
+
+POST {{CleanTemplate.Host_HostAddress}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@local.template",
+  "password": "{{admin_password}}"
+}
+
+###
+
+POST {{CleanTemplate.Host_HostAddress}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refresh_token}}"
+}
+
+###
+
+POST {{CleanTemplate.Host_HostAddress}}/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refresh_token}}"
+}
+
+###
