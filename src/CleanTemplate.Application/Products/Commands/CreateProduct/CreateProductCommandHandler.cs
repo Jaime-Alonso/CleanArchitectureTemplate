@@ -1,6 +1,6 @@
 using CleanTemplate.Application.Abstractions;
 using CleanTemplate.Domain.Entities;
-using CleanTemplate.SharedKernel.Results;
+using CleanTemplate.Core.SharedKernel.Results;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

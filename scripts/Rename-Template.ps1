@@ -32,7 +32,11 @@ $script:TextExtensions = @(
     ".md",
     ".http",
     ".props",
-    ".targets"
+    ".targets",
+    ".xml",
+    ".yml",
+    ".yaml",
+    ".editorconfig"
 )
 
 function Test-IsExcludedPath {

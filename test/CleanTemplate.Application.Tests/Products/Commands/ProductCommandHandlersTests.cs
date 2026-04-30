@@ -4,7 +4,7 @@ using CleanTemplate.Application.Products.Commands.DeleteProduct;
 using CleanTemplate.Application.Products.Commands.UpdateProduct;
 using CleanTemplate.Application.Tests.Testing.AsyncQuerying;
 using CleanTemplate.Domain.Entities;
-using CleanTemplate.SharedKernel.Errors;
+using CleanTemplate.Core.SharedKernel.Errors;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CleanTemplate.Application.Tests.Products.Commands;

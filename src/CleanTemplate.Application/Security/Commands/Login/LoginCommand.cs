@@ -1,5 +1,5 @@
 using CleanTemplate.Application.Security;
-using CleanTemplate.SharedKernel.Results;
+using CleanTemplate.Core.SharedKernel.Results;
 using MediatR;
 
 namespace CleanTemplate.Application.Security.Commands.Login;

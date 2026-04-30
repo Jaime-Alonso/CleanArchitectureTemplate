@@ -3,9 +3,9 @@ using CleanTemplate.Api.Endpoints;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Api.Security.Extensions;
 using CleanTemplate.Application.Extensions;
-using CleanTemplate.CrossCutting.Networking;
-using CleanTemplate.CrossCutting.Observability;
-using CleanTemplate.CrossCutting.RateLimiting;
+using CleanTemplate.Core.CrossCutting.Networking;
+using CleanTemplate.Core.CrossCutting.Observability;
+using CleanTemplate.Core.CrossCutting.RateLimiting;
 using CleanTemplate.Host.Extensions;
 using CleanTemplate.Infrastructure.Extensions;
 using CleanTemplate.Infrastructure.Persistence;
@@ -60,7 +60,7 @@ try
     }
 
     app.UseConfiguredForwardedHeaders();
-    app.UseCors(CleanTemplate.CrossCutting.Networking.Options.ApiCorsOptions.PolicyName);
+    app.UseCors(CleanTemplate.Core.CrossCutting.Networking.Options.ApiCorsOptions.PolicyName);
     app.UseHttpsRedirection();
 
     app.UseAuthentication();

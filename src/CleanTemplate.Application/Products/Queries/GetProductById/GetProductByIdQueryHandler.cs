@@ -1,6 +1,6 @@
 using CleanTemplate.Application.Abstractions;
-using CleanTemplate.SharedKernel.Errors;
-using CleanTemplate.SharedKernel.Results;
+using CleanTemplate.Core.SharedKernel.Errors;
+using CleanTemplate.Core.SharedKernel.Results;
 using MediatR;
 
 namespace CleanTemplate.Application.Products.Queries.GetProductById;

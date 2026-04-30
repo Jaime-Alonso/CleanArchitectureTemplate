@@ -1,5 +1,5 @@
 using MediatR;
-using CleanTemplate.SharedKernel.Results;
+using CleanTemplate.Core.SharedKernel.Results;
 
 namespace CleanTemplate.Application.Products.Commands.UpdateProduct;
 

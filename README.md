@@ -45,6 +45,7 @@ After applying changes, run:
 
 ```powershell
 dotnet build .\MyAppArchitecture.slnx
+dotnet test .\MyAppArchitecture.slnx
 ```
 
 ---
@@ -53,11 +54,10 @@ dotnet build .\MyAppArchitecture.slnx
 
 The generated solution includes the following projects:
 
-- `MyApp.SharedKernel` _(optional, recommended when using Result/Primitives shared across layers)_
+- `MyApp.Core` _(contains `Core/SharedKernel` primitives and `Core/CrossCutting` technical concerns)_
 - `MyApp.Domain`
 - `MyApp.Application`
 - `MyApp.Infrastructure`
-- `MyApp.CrossCutting` _(technical cross-cutting concerns for outer layers)_
 - `MyApp.Api`
 - `MyApp.Host`
 
@@ -73,14 +73,13 @@ And one or more test projects, for example:
 
 In Visual Studio, **Solution Folders** (organizational only, not physical folders) are created in this order:
 
-1. **SharedKernel**
+1. **Core**
 2. **Domain**
 3. **Application**
 4. **Infrastructure**
-5. **CrossCutting**
-6. **Api**
-7. **Host**
-8. **Tests**
+5. **Api**
+6. **Host**
+7. **Tests**
 
 ### Why this enumeration?
 
@@ -88,24 +87,19 @@ The order reflects the **dependency rule of Clean Architecture**:
 
 > Dependencies must always point inward, toward the core.
 
-- **SharedKernel** (if present) is the innermost layer: pure primitives reused across inner layers (`Result`, `Error`, `Guard`, base `Entity`, `ValueObject`, etc.).  
-  It depends on nothing.
-- **Domain** contains business rules and invariants.  
-  It may depend on `SharedKernel`, but never on outer layers.
+- **Core** is the innermost shared base and includes two internal areas: `Core/SharedKernel` (pure primitives like `Result`, `Error`, `Guard`, base `Entity`, `ValueObject`) and `Core/CrossCutting` (technical runtime concerns like observability, networking, and rate limiting).
+- **Domain** contains business rules and invariants and should only consume `Core.SharedKernel` primitives, never outer layers.
 
 - **Application** implements use cases (MediatR handlers), orchestrates domain logic, and defines contracts (interfaces) to be implemented by infrastructure.  
-  It depends on `Domain` (and transitively `SharedKernel`).
+  It depends on `Domain`.
 
 - **Infrastructure** implements technical details (EF Core, repositories, external integrations).  
   It depends on `Application` (to implement its interfaces) and possibly `Domain`.
 
-- **CrossCutting** contains reusable technical concerns for outer layers (for example observability, forwarded headers, rate limiting, and CORS policy registration).  
-  It should not be referenced by `Domain` or `Application`.
-
 - **Api** contains the HTTP contract and endpoint surface (Minimal API endpoint mapping and request/response contracts).  
   It depends on `Application`.
 
-- **Host** is the executable entry point that composes `Api`, `Infrastructure`, and `CrossCutting` runtime concerns.
+- **Host** is the executable entry point that composes `Api`, `Infrastructure`, and `Core` runtime concerns.
 - **Tests** are placed last to clearly separate production code from verification concerns.
 
 Visually, this ordering reinforces the architectural message:  
@@ -115,13 +109,12 @@ Visually, this ordering reinforces the architectural message:
 
 ## Dependency Overview
 
-- `SharedKernel` → no dependencies
-- `Domain` → depends on `SharedKernel` (optional)
-- `Application` → depends on `Domain` (SharedKernel is consumed transitively through Domain)
+- `Core` → shared base project with `SharedKernel` + `CrossCutting` modules
+- `Domain` → depends on `Core` (consuming `Core.SharedKernel` primitives)
+- `Application` → depends on `Domain`
 - `Infrastructure` → depends on `Application` (and possibly `Domain`)
-- `CrossCutting` → technical concerns for outer layers (no business rules)
 - `Api` → depends on `Application`
-- `Host` → depends on `Api` + `Infrastructure` + `CrossCutting`
+- `Host` → depends on `Api` + `Infrastructure` + `Core`
 - `Tests` → depend on the projects they test
 
 ## Requirements
@@ -135,14 +128,13 @@ Visually, this ordering reinforces the architectural message:
 
 The solution folders are intentionally ordered to reflect **Clean Architecture dependency rules**:
 
-1. SharedKernel
+1. Core
 2. Domain
 3. Application
 4. Infrastructure
-5. CrossCutting
-6. Api
-7. Host
-8. Tests
+5. Api
+6. Host
+7. Tests
 
 This order emphasizes that:
 
@@ -154,9 +146,9 @@ The structure communicates architecture clearly and reinforces proper layering.
 
 ---
 
-### SharedKernel Usage
+### Core SharedKernel Usage
 
-`SharedKernel` exists to host **pure, reusable primitives** shared by inner layers.
+`Core/SharedKernel` hosts **pure, reusable primitives** shared by inner layers.
 
 Typical contents:
 
@@ -177,7 +169,7 @@ Rules:
 
 It must remain lightweight and framework-agnostic.
 
-If you only need a small helper, consider avoiding this project to prevent unnecessary complexity.
+If you only need a small helper, keep it minimal and avoid adding unnecessary complexity to this module.
 
 ---
 
@@ -228,9 +220,9 @@ It depends on Application but should not introduce business logic.
 
 ---
 
-### CrossCutting Layer
+### Core CrossCutting Module
 
-The `CrossCutting` project contains reusable **technical** concerns for outer layers, such as:
+The `Core/CrossCutting` module contains reusable **technical** concerns for outer layers, such as:
 
 - OpenTelemetry registration
 - Rate limiting policies and options
@@ -243,7 +235,7 @@ Rules:
 
 - No business rules
 - No domain invariants
-- Do not reference it from `Domain` or `Application`
+- Do not expose these technical concerns as dependencies for domain rules
 
 ---
 

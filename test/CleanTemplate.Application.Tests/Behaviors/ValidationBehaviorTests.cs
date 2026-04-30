@@ -1,6 +1,6 @@
 using CleanTemplate.Application.Behaviors;
-using CleanTemplate.SharedKernel.Errors;
-using CleanTemplate.SharedKernel.Results;
+using CleanTemplate.Core.SharedKernel.Errors;
+using CleanTemplate.Core.SharedKernel.Results;
 using FluentValidation;
 using MediatR;
 

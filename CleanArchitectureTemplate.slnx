@@ -1,6 +1,6 @@
 <Solution>
-  <Folder Name="/01. SharedKernel/">
-    <Project Path="src/CleanTemplate.SharedKernel/CleanTemplate.SharedKernel.csproj" />
+  <Folder Name="/01. Core/">
+    <Project Path="src/CleanTemplate.Core/CleanTemplate.Core.csproj" />
   </Folder>
   <Folder Name="/02. Domain/">
     <Project Path="src/CleanTemplate.Domain/CleanTemplate.Domain.csproj" />
@@ -10,9 +10,6 @@
   </Folder>
   <Folder Name="/04. Infrastructure/">
     <Project Path="src/CleanTemplate.Infrastructure/CleanTemplate.Infrastructure.csproj" />
-  </Folder>
-  <Folder Name="/05. CrossCutting/">
-    <Project Path="src/CleanTemplate.CrossCutting/CleanTemplate.CrossCutting.csproj" />
   </Folder>
   <Folder Name="/06. Api/">
     <Project Path="src/CleanTemplate.Api/CleanTemplate.Api.csproj" />

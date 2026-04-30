@@ -1,4 +1,4 @@
-using CleanTemplate.SharedKernel.Entities;
+using CleanTemplate.Core.SharedKernel.Entities;
 using CleanTemplate.Domain.Exceptions;
 
 namespace CleanTemplate.Domain.Entities;
