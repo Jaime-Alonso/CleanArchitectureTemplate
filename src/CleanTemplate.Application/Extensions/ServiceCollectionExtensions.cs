@@ -1,6 +1,6 @@
 using CleanTemplate.Application.Behaviors;
 using FluentValidation;
-using MediatR;
+using Mediora;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CleanTemplate.Application.Extensions;
@@ -11,10 +11,9 @@ public static class ServiceCollectionExtensions
     {
         var assembly = typeof(ServiceCollectionExtensions).Assembly;
 
-        services.AddMediatR(cfg =>
+        services.AddMediora(cfg =>
         {
             cfg.RegisterServicesFromAssembly(assembly);
-            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });
 
         services.AddValidatorsFromAssembly(assembly);

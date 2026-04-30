@@ -1,6 +1,6 @@
 using CleanTemplate.Application.Security;
 using CleanTemplate.Core.SharedKernel.Results;
-using MediatR;
+using Mediora;
 
 namespace CleanTemplate.Application.Security.Commands.RefreshToken;
 

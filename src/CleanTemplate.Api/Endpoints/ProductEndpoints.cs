@@ -1,4 +1,4 @@
-using MediatR;
+using Mediora;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using CleanTemplate.Api.Endpoints.Contracts.Products;

@@ -1,5 +1,5 @@
 using CleanTemplate.Application.Abstractions;
-using MediatR;
+using Mediora;
 using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Security.Commands.Logout;

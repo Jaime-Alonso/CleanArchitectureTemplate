@@ -1,4 +1,4 @@
-using MediatR;
+using Mediora;
 using CleanTemplate.Core.SharedKernel.Results;
 
 namespace CleanTemplate.Application.Products.Commands.UpdateProduct;

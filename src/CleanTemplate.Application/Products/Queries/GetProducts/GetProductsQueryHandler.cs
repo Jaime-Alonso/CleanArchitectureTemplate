@@ -1,5 +1,5 @@
 using CleanTemplate.Application.Abstractions;
-using MediatR;
+using Mediora;
 
 namespace CleanTemplate.Application.Products.Queries.GetProducts;
 

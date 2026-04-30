@@ -124,7 +124,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using MediatR;
+using Mediora;
 using CleanTemplate.Domain.Entities;
 using CleanTemplate.Application.Interfaces;
 ```
@@ -220,7 +220,7 @@ public async Task<Result<User>> GetUserAsync(
 ### SharedKernel
 
 - Pure C# primitives only
-- No external dependencies (no EF Core, no MediatR, no HTTP)
+- No external dependencies (no EF Core, no Mediora, no HTTP)
 - Contains: `Result`, `Error`, `Guard`, base `Entity`, `ValueObject`
 
 ### Domain
@@ -232,7 +232,7 @@ public async Task<Result<User>> GetUserAsync(
 
 ### Application
 
-- MediatR handlers (CQRS pattern)
+- Mediora handlers (CQRS pattern)
 - DTOs for application flow
 - Interface definitions for Infrastructure to implement
 - Validation logic

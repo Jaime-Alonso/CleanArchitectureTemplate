@@ -3,7 +3,7 @@ using CleanTemplate.Api.Extensions;
 using CleanTemplate.Application.Security.Commands.Login;
 using CleanTemplate.Application.Security.Commands.Logout;
 using CleanTemplate.Application.Security.Commands.RefreshToken;
-using MediatR;
+using Mediora;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 

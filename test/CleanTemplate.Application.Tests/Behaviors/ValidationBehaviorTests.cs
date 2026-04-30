@@ -2,7 +2,7 @@ using CleanTemplate.Application.Behaviors;
 using CleanTemplate.Core.SharedKernel.Errors;
 using CleanTemplate.Core.SharedKernel.Results;
 using FluentValidation;
-using MediatR;
+using Mediora;
 
 namespace CleanTemplate.Application.Tests.Behaviors;
 
@@ -16,7 +16,7 @@ public sealed class ValidationBehaviorTests
 
         var response = await behavior.Handle(
             new TestCommand { Name = string.Empty },
-            _ => Task.FromResult(Result<Guid>.Success(Guid.NewGuid())),
+            () => Task.FromResult(Result<Guid>.Success(Guid.NewGuid())),
             CancellationToken.None);
 
         Assert.True(response.IsFailure);

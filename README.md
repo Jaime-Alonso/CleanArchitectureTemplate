@@ -1,6 +1,6 @@
-# Clean Architecture Simple Template (.NET) — Minimal API + MediatR
+# Clean Architecture Simple Template (.NET) — Minimal API + Mediora
 
-This repository provides a **solution template** for starting .NET projects using a **simple Clean Architecture**, built with **Minimal API** and **MediatR**, without additional modular complexity.
+This repository provides a **solution template** for starting .NET projects using a **simple Clean Architecture**, built with **Minimal API** and **Mediora**, without additional modular complexity.
 
 The template is designed to be:
 
@@ -90,7 +90,7 @@ The order reflects the **dependency rule of Clean Architecture**:
 - **Core** is the innermost shared base and includes two internal areas: `Core/SharedKernel` (pure primitives like `Result`, `Error`, `Guard`, base `Entity`, `ValueObject`) and `Core/CrossCutting` (technical runtime concerns like observability, networking, and rate limiting).
 - **Domain** contains business rules and invariants and should only consume `Core.SharedKernel` primitives, never outer layers.
 
-- **Application** implements use cases (MediatR handlers), orchestrates domain logic, and defines contracts (interfaces) to be implemented by infrastructure.  
+- **Application** implements use cases (Mediora handlers), orchestrates domain logic, and defines contracts (interfaces) to be implemented by infrastructure.  
   It depends on `Domain`.
 
 - **Infrastructure** implements technical details (EF Core, repositories, external integrations).  
@@ -164,7 +164,7 @@ Rules:
 - No EF Core
 - No HTTP concerns
 - No logging frameworks
-- No MediatR
+- No Mediora
 - No infrastructure dependencies
 
 It must remain lightweight and framework-agnostic.
@@ -191,7 +191,7 @@ It must not depend on Application, Infrastructure, or Api.
 
 The `Application` project contains:
 
-- Use cases (MediatR handlers)
+- Use cases (Mediora handlers)
 - DTOs for application flow
 - Interfaces (repositories, services)
 - Validation logic

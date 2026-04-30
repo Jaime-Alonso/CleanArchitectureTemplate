@@ -7,7 +7,7 @@
   <ItemGroup>
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-    <PackageReference Include="MediatR" />
+    <PackageReference Include="Mediora" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
   </ItemGroup>
 

@@ -2,7 +2,7 @@ using CleanTemplate.Application.Abstractions;
 using CleanTemplate.Application.Products;
 using CleanTemplate.Core.SharedKernel.Errors;
 using CleanTemplate.Core.SharedKernel.Results;
-using MediatR;
+using Mediora;
 using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Products.Commands.DeleteProduct;

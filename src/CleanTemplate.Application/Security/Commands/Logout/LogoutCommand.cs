@@ -1,4 +1,4 @@
-using MediatR;
+using Mediora;
 
 namespace CleanTemplate.Application.Security.Commands.Logout;
 

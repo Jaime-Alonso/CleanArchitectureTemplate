@@ -1,6 +1,6 @@
 using FluentValidation;
 using FluentValidation.Results;
-using MediatR;
+using Mediora;
 using CleanTemplate.Core.SharedKernel.Errors;
 using CleanTemplate.Core.SharedKernel.Results;
 
@@ -22,7 +22,7 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
         CancellationToken cancellationToken)
     {
         if (!_validators.Any())
-            return await next(cancellationToken).ConfigureAwait(false);
+            return await next().ConfigureAwait(false);
 
         var context = new ValidationContext<TRequest>(request);
         var validationResults = await Task.WhenAll(
@@ -36,7 +36,7 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
         if (failures.Count != 0)
             return CreateValidationFailureResponse(failures);
 
-        return await next(cancellationToken).ConfigureAwait(false);
+        return await next().ConfigureAwait(false);
     }
 
     private static TResponse CreateValidationFailureResponse(IReadOnlyCollection<ValidationFailure> failures)
