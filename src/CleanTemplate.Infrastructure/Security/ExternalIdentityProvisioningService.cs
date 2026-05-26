@@ -6,7 +6,6 @@ using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Infrastructure.Security;
@@ -25,18 +24,18 @@ public sealed class ExternalIdentityProvisioningService : IExternalIdentityProvi
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IExternalRoleMapper _externalRoleMapper;
-    private readonly IMemoryCache _memoryCache;
+    private readonly ICacheService _cacheService;
     private readonly ILogger<ExternalIdentityProvisioningService> _logger;
 
     public ExternalIdentityProvisioningService(
         UserManager<ApplicationUser> userManager,
         IExternalRoleMapper externalRoleMapper,
-        IMemoryCache memoryCache,
+        ICacheService cacheService,
         ILogger<ExternalIdentityProvisioningService> logger)
     {
         _userManager = userManager;
         _externalRoleMapper = externalRoleMapper;
-        _memoryCache = memoryCache;
+        _cacheService = cacheService;
         _logger = logger;
     }
 
@@ -60,10 +59,17 @@ public sealed class ExternalIdentityProvisioningService : IExternalIdentityProvi
         cancellationToken.ThrowIfCancellationRequested();
 
         var cacheKey = $"external-provisioning:{externalIdentity.Provider}:{externalIdentity.ProviderSubject}";
-        if (_memoryCache.TryGetValue<ProvisionResult>(cacheKey, out var cachedResult) && cachedResult is not null)
-        {
-            return cachedResult;
-        }
+
+        return await _cacheService.GetOrSetAsync(
+            cacheKey,
+            _ => ProvisionInternalAsync(externalIdentity, cancellationToken),
+            CacheDuration,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ProvisionResult> ProvisionInternalAsync(ExternalIdentity externalIdentity, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
 
         var provisioningOccurred = false;
         var user = await _userManager.FindByLoginAsync(externalIdentity.Provider, externalIdentity.ProviderSubject).ConfigureAwait(false);
@@ -156,8 +162,6 @@ public sealed class ExternalIdentityProvisioningService : IExternalIdentityProvi
             InternalRoles = targetRoles,
             ProvisioningOccurred = provisioningOccurred
         };
-
-        _memoryCache.Set(cacheKey, provisionResult, CacheDuration);
 
         _logger.LogInformation(
             "OIDC provisioning completed for provider {Provider} and subject {Subject}. Internal user {InternalUserId}. Provisioning occurred: {ProvisioningOccurred}",

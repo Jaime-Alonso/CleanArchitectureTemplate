@@ -1,5 +1,7 @@
 using System;
 using CleanTemplate.Application.Contracts;
+using CleanTemplate.Infrastructure.Caching;
+using CleanTemplate.Infrastructure.Caching.Options;
 using CleanTemplate.Infrastructure.Database;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;
@@ -96,6 +98,16 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         services
+            .AddOptions<CacheOptions>()
+            .Bind(configuration.GetSection(CacheOptions.SectionName))
+            .Validate(options => options.DefaultTtlSeconds > 0, "Caching:DefaultTtlSeconds must be greater than zero.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.KeyPrefix), "Caching:KeyPrefix must be configured.")
+            .Validate(
+                options => options.Provider != CacheProvider.Redis || !string.IsNullOrWhiteSpace(options.Redis.ConnectionString),
+                "Caching:Redis:ConnectionString must be configured when Caching:Provider is Redis.")
+            .ValidateOnStart();
+
+        services
             .AddIdentityCore<ApplicationUser>(options =>
             {
                 options.User.RequireUniqueEmail = true;
@@ -113,9 +125,33 @@ public static class ServiceCollectionExtensions
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<ApplicationDbContext>();
 
+        var cacheOptions = configuration.GetSection(CacheOptions.SectionName).Get<CacheOptions>() ?? new CacheOptions();
+
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<IdentityDataSeeder>();
-        services.AddMemoryCache();
+
+        switch (cacheOptions.Provider)
+        {
+            case CacheProvider.Memory:
+                services.AddMemoryCache();
+                services.AddSingleton<ICacheService, MemoryCacheService>();
+                break;
+            case CacheProvider.Redis:
+                if (string.IsNullOrWhiteSpace(cacheOptions.Redis.ConnectionString))
+                {
+                    throw new InvalidOperationException("Caching:Redis:ConnectionString must be configured when Caching:Provider is Redis.");
+                }
+
+                services.AddStackExchangeRedisCache(options =>
+                {
+                    options.Configuration = cacheOptions.Redis.ConnectionString;
+                    options.InstanceName = cacheOptions.Redis.InstanceName;
+                });
+                services.AddSingleton<ICacheService, RedisCacheService>();
+                break;
+            default:
+                throw new InvalidOperationException($"Unsupported cache provider '{cacheOptions.Provider}'.");
+        }
 
         var readConnectionString = configuration.GetConnectionString("ReadConnection")
             ?? configuration.GetConnectionString("DapperConnection")
