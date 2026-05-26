@@ -21,7 +21,14 @@ public sealed class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQ
             .ConfigureAwait(false);
 
         return product is not null
-            ? Result<ProductDto>.Success(product)
+            ? Result<ProductDto>.Success(new ProductDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                Stock = product.Stock
+            })
             : Result<ProductDto>.Failure(Error.NotFound("Products.NotFound", $"Product '{request.Id}' was not found."));
     }
 }

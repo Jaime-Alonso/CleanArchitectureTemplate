@@ -4,8 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CleanTemplate.Application.Abstractions;
-using CleanTemplate.Application.Products.Queries.GetProductById;
-using CleanTemplate.Application.Products.Queries.GetProducts;
+using CleanTemplate.Application.Products.ReadModels;
 using CleanTemplate.Infrastructure.Database;
 using Dapper;
 
@@ -27,7 +26,7 @@ public sealed class ProductReadRepository : IProductReadRepository
         _sqlDialect = sqlDialect;
     }
 
-    public async Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ProductReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         const string sql = """
             SELECT "Id", "Name", "Description", "Price", "Stock"
@@ -50,7 +49,7 @@ public sealed class ProductReadRepository : IProductReadRepository
             return null;
         }
 
-        return new ProductDto
+        return new ProductReadModel
         {
             Id = row.Id,
             Name = row.Name,
@@ -60,7 +59,7 @@ public sealed class ProductReadRepository : IProductReadRepository
         };
     }
 
-    public async Task<IReadOnlyList<ProductListItemDto>> GetPagedAsync(
+    public async Task<IReadOnlyList<ProductListItemReadModel>> GetPagedAsync(
         int page,
         int pageSize,
         string sortBy,
@@ -92,7 +91,7 @@ public sealed class ProductReadRepository : IProductReadRepository
             .ConfigureAwait(false);
 
         return result
-            .Select(row => new ProductListItemDto
+            .Select(row => new ProductListItemReadModel
             {
                 Id = row.Id,
                 Name = row.Name,

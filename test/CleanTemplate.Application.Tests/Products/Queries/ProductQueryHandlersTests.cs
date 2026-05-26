@@ -1,6 +1,7 @@
 using CleanTemplate.Application.Abstractions;
 using CleanTemplate.Application.Products.Queries.GetProductById;
 using CleanTemplate.Application.Products.Queries.GetProducts;
+using CleanTemplate.Application.Products.ReadModels;
 
 namespace CleanTemplate.Application.Tests.Products.Queries;
 
@@ -18,6 +19,14 @@ public sealed class ProductQueryHandlersTests
         var repository = new FakeProductReadRepository
         {
             PagedProducts = expected
+                .Select(product => new ProductListItemReadModel
+                {
+                    Id = product.Id,
+                    Name = product.Name,
+                    Price = product.Price,
+                    Stock = product.Stock
+                })
+                .ToList()
         };
 
         var handler = new GetProductsQueryHandler(repository);
@@ -73,7 +82,14 @@ public sealed class ProductQueryHandlersTests
 
         var repository = new FakeProductReadRepository
         {
-            Product = expected
+            Product = new ProductReadModel
+            {
+                Id = expected.Id,
+                Name = expected.Name,
+                Description = expected.Description,
+                Price = expected.Price,
+                Stock = expected.Stock
+            }
         };
 
         var handler = new GetProductByIdQueryHandler(repository);
@@ -87,21 +103,21 @@ public sealed class ProductQueryHandlersTests
 
     private sealed class FakeProductReadRepository : IProductReadRepository
     {
-        public ProductDto? Product { get; set; }
-        public IReadOnlyList<ProductListItemDto> PagedProducts { get; set; } = [];
+        public ProductReadModel? Product { get; set; }
+        public IReadOnlyList<ProductListItemReadModel> PagedProducts { get; set; } = [];
         public Guid LastRequestedId { get; private set; }
         public int LastPage { get; private set; }
         public int LastPageSize { get; private set; }
         public string LastSortBy { get; private set; } = string.Empty;
         public string LastSortDirection { get; private set; } = string.Empty;
 
-        public Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        public Task<ProductReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             LastRequestedId = id;
             return Task.FromResult(Product);
         }
 
-        public Task<IReadOnlyList<ProductListItemDto>> GetPagedAsync(
+        public Task<IReadOnlyList<ProductListItemReadModel>> GetPagedAsync(
             int page,
             int pageSize,
             string sortBy,

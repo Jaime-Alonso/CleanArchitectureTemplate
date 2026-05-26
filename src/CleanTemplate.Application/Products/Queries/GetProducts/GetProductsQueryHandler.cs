@@ -21,8 +21,18 @@ public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, 
         var normalizedSortBy = GetProductsQuery.NormalizeSortBy(request.SortBy);
         var normalizedSortDirection = GetProductsQuery.NormalizeSortDirection(request.SortDirection);
 
-        return await _productReadRepository
+        var products = await _productReadRepository
             .GetPagedAsync(normalizedPage, normalizedPageSize, normalizedSortBy, normalizedSortDirection, cancellationToken)
             .ConfigureAwait(false);
+
+        return products
+            .Select(product => new ProductListItemDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Price = product.Price,
+                Stock = product.Stock
+            })
+            .ToList();
     }
 }
