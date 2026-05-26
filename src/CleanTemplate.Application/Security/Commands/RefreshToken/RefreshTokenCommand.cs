@@ -1,4 +1,3 @@
-using CleanTemplate.Application.Security;
 using CleanTemplate.SharedKernel.Results;
 using Mediora;
 

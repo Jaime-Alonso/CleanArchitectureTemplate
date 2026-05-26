@@ -1,9 +1,8 @@
-using System;
-using System.Collections.Generic;
 using CleanTemplate.Crosscutting.Observability.Options;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -18,7 +17,7 @@ public static class OpenTelemetryExtensions
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        var options = configuration
+        OpenTelemetryOptions options = configuration
             .GetSection(OpenTelemetryOptions.SectionName)
             .Get<OpenTelemetryOptions>() ?? new OpenTelemetryOptions();
 
@@ -27,22 +26,22 @@ public static class OpenTelemetryExtensions
             return services;
         }
 
-        var serviceName = string.IsNullOrWhiteSpace(options.ServiceName)
+        string serviceName = string.IsNullOrWhiteSpace(options.ServiceName)
             ? environment.ApplicationName
             : options.ServiceName;
 
-        var serviceVersion = string.IsNullOrWhiteSpace(options.ServiceVersion)
+        string serviceVersion = string.IsNullOrWhiteSpace(options.ServiceVersion)
             ? "1.0.0"
             : options.ServiceVersion;
 
-        var endpoint = string.IsNullOrWhiteSpace(options.Otlp.Endpoint)
+        string endpoint = string.IsNullOrWhiteSpace(options.Otlp.Endpoint)
             ? "http://localhost:4317"
             : options.Otlp.Endpoint;
 
-        var otlpProtocol = ResolveProtocol(options.Otlp.Protocol);
-        var samplingRatio = Math.Clamp(options.Traces.SamplingRatio, 0d, 1d);
+        OtlpExportProtocol otlpProtocol = ResolveProtocol(options.Otlp.Protocol);
+        double samplingRatio = Math.Clamp(options.Traces.SamplingRatio, 0d, 1d);
 
-        var resourceBuilder = ResourceBuilder
+        ResourceBuilder resourceBuilder = ResourceBuilder
             .CreateDefault()
             .AddService(serviceName: serviceName, serviceVersion: serviceVersion)
             .AddAttributes(
@@ -50,7 +49,7 @@ public static class OpenTelemetryExtensions
                 new KeyValuePair<string, object>("deployment.environment", environment.EnvironmentName)
             ]);
 
-        var builder = services
+        OpenTelemetryBuilder builder = services
             .AddOpenTelemetry()
             .ConfigureResource(resource => resource
                 .AddService(serviceName: serviceName, serviceVersion: serviceVersion)

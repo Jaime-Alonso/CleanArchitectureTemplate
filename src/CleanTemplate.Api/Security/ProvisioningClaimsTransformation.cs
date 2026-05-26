@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Threading;
 using CleanTemplate.Api.Security.Options;
 using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;

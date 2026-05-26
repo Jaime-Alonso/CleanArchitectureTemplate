@@ -1,4 +1,3 @@
-using CleanTemplate.Application.Behaviors;
 using FluentValidation;
 using Mediora;
 using Microsoft.Extensions.DependencyInjection;

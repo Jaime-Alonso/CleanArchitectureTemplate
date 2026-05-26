@@ -1,4 +1,3 @@
-using Asp.Versioning;
 using CleanTemplate.Api.Endpoints;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Api.Security.Extensions;

@@ -1,5 +1,3 @@
-using System;
-
 namespace CleanTemplate.Infrastructure.Security;
 
 public sealed class RefreshToken

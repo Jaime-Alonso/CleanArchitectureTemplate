@@ -8,7 +8,7 @@ public static class CorsExtensions
 {
     public static IServiceCollection AddApiCors(this IServiceCollection services, IConfiguration configuration)
     {
-        var corsOptions = configuration
+        ApiCorsOptions corsOptions = configuration
             .GetSection(ApiCorsOptions.SectionName)
             .Get<ApiCorsOptions>()
             ?? new ApiCorsOptions();
@@ -23,7 +23,7 @@ public static class CorsExtensions
                 }
 
                 policy
-                    .WithOrigins(corsOptions.AllowedOrigins.ToArray())
+                    .WithOrigins([.. corsOptions.AllowedOrigins])
                     .AllowAnyHeader()
                     .AllowAnyMethod();
             });

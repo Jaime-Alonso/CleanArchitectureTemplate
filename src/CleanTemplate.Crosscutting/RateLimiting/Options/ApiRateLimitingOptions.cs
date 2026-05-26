@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace CleanTemplate.Crosscutting.RateLimiting.Options;
 
 public sealed class ApiRateLimitingOptions

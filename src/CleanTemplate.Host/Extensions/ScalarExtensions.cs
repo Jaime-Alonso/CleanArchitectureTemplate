@@ -1,8 +1,5 @@
 using Asp.Versioning;
-using Asp.Versioning.ApiExplorer;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.OpenApi;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 

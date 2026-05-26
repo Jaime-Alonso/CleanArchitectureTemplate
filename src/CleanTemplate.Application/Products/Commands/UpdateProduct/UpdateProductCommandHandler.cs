@@ -1,4 +1,5 @@
 using CleanTemplate.Application.Contracts;
+using CleanTemplate.Domain.Entities;
 using CleanTemplate.SharedKernel.Errors;
 using CleanTemplate.SharedKernel.Results;
 using Mediora;
@@ -6,20 +7,14 @@ using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Products.Commands.UpdateProduct;
 
-public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, Result>
+public sealed class UpdateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<UpdateProductCommandHandler> logger) : IRequestHandler<UpdateProductCommand, Result>
 {
-    private readonly IProductWriteRepository _productWriteRepository;
-    private readonly ILogger<UpdateProductCommandHandler> _logger;
-
-    public UpdateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<UpdateProductCommandHandler> logger)
-    {
-        _productWriteRepository = productWriteRepository;
-        _logger = logger;
-    }
+    private readonly IProductWriteRepository _productWriteRepository = productWriteRepository;
+    private readonly ILogger<UpdateProductCommandHandler> _logger = logger;
 
     public async Task<Result> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
     {
-        var product = await _productWriteRepository
+        Product? product = await _productWriteRepository
             .GetByIdAsync(request.Id, cancellationToken)
             .ConfigureAwait(false);
 

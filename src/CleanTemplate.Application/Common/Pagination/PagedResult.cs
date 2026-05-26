@@ -10,8 +10,8 @@ public sealed record PagedResult<T>
 
     public static PagedResult<T> Create(IReadOnlyList<T> items, int page, int pageSize, int totalCount)
     {
-        var safePageSize = pageSize < 1 ? 1 : pageSize;
-        var totalPages = totalCount <= 0
+        int safePageSize = pageSize < 1 ? 1 : pageSize;
+        int totalPages = totalCount <= 0
             ? 0
             : (int)Math.Ceiling(totalCount / (double)safePageSize);
 

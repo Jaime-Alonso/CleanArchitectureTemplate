@@ -1,7 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;

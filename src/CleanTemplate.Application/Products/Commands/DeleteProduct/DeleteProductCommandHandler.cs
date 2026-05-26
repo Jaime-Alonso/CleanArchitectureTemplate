@@ -1,4 +1,5 @@
 using CleanTemplate.Application.Contracts;
+using CleanTemplate.Domain.Entities;
 using CleanTemplate.SharedKernel.Errors;
 using CleanTemplate.SharedKernel.Results;
 using Mediora;
@@ -6,20 +7,14 @@ using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Products.Commands.DeleteProduct;
 
-public sealed class DeleteProductCommandHandler : IRequestHandler<DeleteProductCommand, Result>
+public sealed class DeleteProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<DeleteProductCommandHandler> logger) : IRequestHandler<DeleteProductCommand, Result>
 {
-    private readonly IProductWriteRepository _productWriteRepository;
-    private readonly ILogger<DeleteProductCommandHandler> _logger;
-
-    public DeleteProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<DeleteProductCommandHandler> logger)
-    {
-        _productWriteRepository = productWriteRepository;
-        _logger = logger;
-    }
+    private readonly IProductWriteRepository _productWriteRepository = productWriteRepository;
+    private readonly ILogger<DeleteProductCommandHandler> _logger = logger;
 
     public async Task<Result> Handle(DeleteProductCommand request, CancellationToken cancellationToken)
     {
-        var product = await _productWriteRepository
+        Product? product = await _productWriteRepository
             .GetByIdAsync(request.Id, cancellationToken)
             .ConfigureAwait(false);
 

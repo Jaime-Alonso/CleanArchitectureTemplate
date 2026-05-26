@@ -19,11 +19,6 @@ public abstract record PaginationCriteria
 
     public static int NormalizePageSize(int pageSize)
     {
-        if (pageSize < 1)
-        {
-            return DefaultPageSize;
-        }
-
-        return pageSize > MaxPageSize ? MaxPageSize : pageSize;
+        return pageSize < 1 ? DefaultPageSize : pageSize > MaxPageSize ? MaxPageSize : pageSize;
     }
 }

@@ -1,14 +1,8 @@
 namespace CleanTemplate.Domain.Exceptions;
 
-public abstract class DomainException : Exception
+public abstract class DomainException(string code, string message) : Exception(message)
 {
-    protected DomainException(string code, string message)
-        : base(message)
-    {
-        Code = string.IsNullOrWhiteSpace(code)
+    public string Code { get; } = string.IsNullOrWhiteSpace(code)
             ? throw new ArgumentException("Code cannot be empty.", nameof(code))
             : code;
-    }
-
-    public string Code { get; }
 }

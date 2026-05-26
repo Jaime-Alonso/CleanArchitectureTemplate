@@ -1,22 +1,18 @@
 using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Products.ReadModels;
 using CleanTemplate.SharedKernel.Errors;
 using CleanTemplate.SharedKernel.Results;
 using Mediora;
 
 namespace CleanTemplate.Application.Products.Queries.GetProductById;
 
-public sealed class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQuery, Result<ProductDto>>
+public sealed class GetProductByIdQueryHandler(IProductReadRepository productReadRepository) : IRequestHandler<GetProductByIdQuery, Result<ProductDto>>
 {
-    private readonly IProductReadRepository _productReadRepository;
-
-    public GetProductByIdQueryHandler(IProductReadRepository productReadRepository)
-    {
-        _productReadRepository = productReadRepository;
-    }
+    private readonly IProductReadRepository _productReadRepository = productReadRepository;
 
     public async Task<Result<ProductDto>> Handle(GetProductByIdQuery request, CancellationToken cancellationToken)
     {
-        var product = await _productReadRepository
+        ProductReadModel? product = await _productReadRepository
             .GetByIdAsync(request.Id, cancellationToken)
             .ConfigureAwait(false);
 

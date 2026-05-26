@@ -10,7 +10,7 @@ public class Result
     {
         ArgumentNullException.ThrowIfNull(errors);
 
-        _errors = errors.ToList();
+        _errors = [.. errors];
 
         if (isSuccess && _errors.Count != 0)
             throw new ArgumentException("A successful result cannot contain errors.", nameof(errors));

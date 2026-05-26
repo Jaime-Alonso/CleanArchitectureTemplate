@@ -6,20 +6,14 @@ using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Products.Commands.CreateProduct;
 
-public sealed class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Result<Guid>>
+public sealed class CreateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<CreateProductCommandHandler> logger) : IRequestHandler<CreateProductCommand, Result<Guid>>
 {
-    private readonly IProductWriteRepository _productWriteRepository;
-    private readonly ILogger<CreateProductCommandHandler> _logger;
-
-    public CreateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<CreateProductCommandHandler> logger)
-    {
-        _productWriteRepository = productWriteRepository;
-        _logger = logger;
-    }
+    private readonly IProductWriteRepository _productWriteRepository = productWriteRepository;
+    private readonly ILogger<CreateProductCommandHandler> _logger = logger;
 
     public async Task<Result<Guid>> Handle(CreateProductCommand request, CancellationToken cancellationToken)
     {
-        var product = new Product(
+        Product product = new(
             request.Name,
             request.Description,
             request.Price,

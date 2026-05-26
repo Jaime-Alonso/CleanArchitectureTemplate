@@ -1,9 +1,5 @@
 namespace CleanTemplate.Domain.Exceptions;
 
-public sealed class DomainValidationException : DomainException
+public sealed class DomainValidationException(string code, string message) : DomainException(code, message)
 {
-    public DomainValidationException(string code, string message)
-        : base(code, message)
-    {
-    }
 }

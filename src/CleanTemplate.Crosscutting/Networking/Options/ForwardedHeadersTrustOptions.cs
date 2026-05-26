@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace CleanTemplate.Crosscutting.Networking.Options;
 
 public sealed class ForwardedHeadersTrustOptions

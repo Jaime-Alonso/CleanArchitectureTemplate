@@ -1,9 +1,6 @@
-using System;
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
 using Npgsql;
 
 namespace CleanTemplate.Infrastructure.Database;

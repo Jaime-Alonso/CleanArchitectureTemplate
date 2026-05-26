@@ -1,5 +1,5 @@
-using System;
 using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Caching;
 using CleanTemplate.Infrastructure.Caching.Options;
 using CleanTemplate.Infrastructure.Database;
@@ -9,7 +9,6 @@ using CleanTemplate.Infrastructure.Repositories.Reads;
 using CleanTemplate.Infrastructure.Repositories.Writes;
 using CleanTemplate.Infrastructure.Security;
 using CleanTemplate.Infrastructure.Security.Options;
-using CleanTemplate.Application.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

@@ -1,5 +1,3 @@
-using System;
-
 namespace CleanTemplate.Infrastructure.Database;
 
 public enum DatabaseProvider

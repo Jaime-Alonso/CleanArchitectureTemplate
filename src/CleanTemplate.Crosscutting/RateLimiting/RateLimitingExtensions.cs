@@ -1,10 +1,8 @@
-using System;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using CleanTemplate.Crosscutting.RateLimiting.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,7 +18,7 @@ public static class RateLimitingExtensions
             .Bind(configuration.GetSection(ApiRateLimitingOptions.SectionName))
             .ValidateOnStart();
 
-        var options = configuration.GetSection(ApiRateLimitingOptions.SectionName).Get<ApiRateLimitingOptions>()
+        ApiRateLimitingOptions options = configuration.GetSection(ApiRateLimitingOptions.SectionName).Get<ApiRateLimitingOptions>()
             ?? new ApiRateLimitingOptions();
 
         services.AddRateLimiter(rateLimiterOptions =>
@@ -32,7 +30,7 @@ public static class RateLimitingExtensions
                     GetPartitionKey(httpContext),
                     _ => BuildFixedWindowOptions(options.Global)));
 
-            foreach (var (policyName, policyOptions) in options.Policies)
+            foreach ((string? policyName, FixedWindowPolicyOptions? policyOptions) in options.Policies)
             {
                 rateLimiterOptions.AddPolicy(policyName, httpContext =>
                     RateLimitPartition.GetFixedWindowLimiter(
@@ -42,13 +40,13 @@ public static class RateLimitingExtensions
 
             rateLimiterOptions.OnRejected = async (context, cancellationToken) =>
             {
-                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
                 {
                     context.HttpContext.Response.Headers.RetryAfter =
                         Math.Ceiling(retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
                 }
 
-                var logger = context.HttpContext.RequestServices
+                ILogger logger = context.HttpContext.RequestServices
                     .GetRequiredService<ILoggerFactory>()
                     .CreateLogger("RateLimiting");
 

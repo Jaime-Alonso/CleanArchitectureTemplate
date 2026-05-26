@@ -5,20 +5,15 @@ using Mediora;
 
 namespace CleanTemplate.Application.Products.Queries.GetProducts;
 
-public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, PagedResult<ProductListItemDto>>
+public sealed class GetProductsQueryHandler(IProductReadRepository productReadRepository) : IRequestHandler<GetProductsQuery, PagedResult<ProductListItemDto>>
 {
-    private readonly IProductReadRepository _productReadRepository;
-
-    public GetProductsQueryHandler(IProductReadRepository productReadRepository)
-    {
-        _productReadRepository = productReadRepository;
-    }
+    private readonly IProductReadRepository _productReadRepository = productReadRepository;
 
     public async Task<PagedResult<ProductListItemDto>> Handle(
         GetProductsQuery request,
         CancellationToken cancellationToken)
     {
-        var criteria = new ProductSearchCriteria
+        ProductSearchCriteria criteria = new()
         {
             Page = request.Page,
             PageSize = request.PageSize,
@@ -29,19 +24,18 @@ public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, 
             }
         };
 
-        var products = await _productReadRepository
+        PagedResult<ProductListItemReadModel> products = await _productReadRepository
             .GetPagedAsync(criteria, cancellationToken)
             .ConfigureAwait(false);
 
-        var items = products.Items
+        List<ProductListItemDto> items = [.. products.Items
             .Select(product => new ProductListItemDto
             {
                 Id = product.Id,
                 Name = product.Name,
                 Price = product.Price,
                 Stock = product.Stock
-            })
-            .ToList();
+            })];
 
         return PagedResult<ProductListItemDto>.Create(
             items,
