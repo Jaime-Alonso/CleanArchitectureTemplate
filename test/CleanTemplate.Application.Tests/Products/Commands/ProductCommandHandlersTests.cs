@@ -2,7 +2,6 @@ using CleanTemplate.Application.Abstractions;
 using CleanTemplate.Application.Products.Commands.CreateProduct;
 using CleanTemplate.Application.Products.Commands.DeleteProduct;
 using CleanTemplate.Application.Products.Commands.UpdateProduct;
-using CleanTemplate.Application.Tests.Testing.AsyncQuerying;
 using CleanTemplate.Domain.Entities;
 using CleanTemplate.SharedKernel.Errors;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,8 +13,8 @@ public sealed class ProductCommandHandlersTests
     [Fact]
     public async Task CreateProductCommand_CreatesEntityAndReturnsId()
     {
-        IApplicationDbContext context = new FakeApplicationDbContext();
-        var handler = new CreateProductCommandHandler(context, NullLogger<CreateProductCommandHandler>.Instance);
+        IProductWriteRepository repository = new FakeProductWriteRepository();
+        var handler = new CreateProductCommandHandler(repository, NullLogger<CreateProductCommandHandler>.Instance);
 
         var command = new CreateProductCommand
         {
@@ -30,15 +29,16 @@ public sealed class ProductCommandHandlersTests
         Assert.True(result.IsSuccess);
         Assert.NotEqual(Guid.Empty, result.Value);
 
-        var persisted = context.Set<Product>().Single(p => p.Id == result.Value);
+        var persisted = await repository.GetByIdAsync(result.Value, CancellationToken.None);
+        Assert.NotNull(persisted);
         Assert.Equal("Mouse", persisted.Name);
     }
 
     [Fact]
     public async Task UpdateProductCommand_WhenProductMissing_ReturnsNotFoundFailure()
     {
-        IApplicationDbContext context = new FakeApplicationDbContext();
-        var handler = new UpdateProductCommandHandler(context, NullLogger<UpdateProductCommandHandler>.Instance);
+        IProductWriteRepository repository = new FakeProductWriteRepository();
+        var handler = new UpdateProductCommandHandler(repository, NullLogger<UpdateProductCommandHandler>.Instance);
 
         var command = new UpdateProductCommand
         {
@@ -59,54 +59,38 @@ public sealed class ProductCommandHandlersTests
     [Fact]
     public async Task DeleteProductCommand_WhenProductExists_RemovesEntity()
     {
-        IApplicationDbContext context = new FakeApplicationDbContext();
+        IProductWriteRepository repository = new FakeProductWriteRepository();
         var product = new Domain.Entities.Product("Monitor", "4K", 300m, 3);
-        context.Add(product);
-        await context.SaveChangesAsync();
+        repository.Add(product);
+        await repository.SaveChangesAsync();
 
-        var handler = new DeleteProductCommandHandler(context, NullLogger<DeleteProductCommandHandler>.Instance);
+        var handler = new DeleteProductCommandHandler(repository, NullLogger<DeleteProductCommandHandler>.Instance);
         var command = new DeleteProductCommand { Id = product.Id };
 
         var result = await handler.Handle(command, CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.False(context.Set<Product>().Any(p => p.Id == product.Id));
+        var removed = await repository.GetByIdAsync(product.Id, CancellationToken.None);
+        Assert.Null(removed);
     }
 
-    private sealed class FakeApplicationDbContext : IApplicationDbContext
+    private sealed class FakeProductWriteRepository : IProductWriteRepository
     {
         private readonly List<Product> _products = [];
 
-        public IQueryable<TEntity> Set<TEntity>() where TEntity : class
+        public Task<Product?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            if (typeof(TEntity) == typeof(Product))
-            {
-                return (IQueryable<TEntity>)(object)new TestAsyncEnumerable<Product>(_products);
-            }
-
-            throw new NotSupportedException($"Entity type '{typeof(TEntity).Name}' is not supported by this fake context.");
+            return Task.FromResult(_products.SingleOrDefault(product => product.Id == id));
         }
 
-        public void Add<TEntity>(TEntity entity) where TEntity : class
+        public void Add(Product product)
         {
-            if (entity is Product product)
-            {
-                _products.Add(product);
-                return;
-            }
-
-            throw new NotSupportedException($"Entity type '{typeof(TEntity).Name}' is not supported by this fake context.");
+            _products.Add(product);
         }
 
-        public void Remove<TEntity>(TEntity entity) where TEntity : class
+        public void Remove(Product product)
         {
-            if (entity is Product product)
-            {
-                _products.Remove(product);
-                return;
-            }
-
-            throw new NotSupportedException($"Entity type '{typeof(TEntity).Name}' is not supported by this fake context.");
+            _products.Remove(product);
         }
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

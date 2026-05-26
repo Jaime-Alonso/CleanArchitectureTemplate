@@ -8,12 +8,12 @@ namespace CleanTemplate.Application.Products.Commands.CreateProduct;
 
 public sealed class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Result<Guid>>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IProductWriteRepository _productWriteRepository;
     private readonly ILogger<CreateProductCommandHandler> _logger;
 
-    public CreateProductCommandHandler(IApplicationDbContext context, ILogger<CreateProductCommandHandler> logger)
+    public CreateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<CreateProductCommandHandler> logger)
     {
-        _context = context;
+        _productWriteRepository = productWriteRepository;
         _logger = logger;
     }
 
@@ -25,8 +25,8 @@ public sealed class CreateProductCommandHandler : IRequestHandler<CreateProductC
             request.Price,
             request.Stock);
 
-        _context.Add(product);
-        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        _productWriteRepository.Add(product);
+        await _productWriteRepository.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Product created successfully. ProductId {ProductId}", product.Id);
 

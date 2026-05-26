@@ -1,5 +1,4 @@
 using CleanTemplate.Application.Abstractions;
-using CleanTemplate.Application.Products;
 using CleanTemplate.SharedKernel.Errors;
 using CleanTemplate.SharedKernel.Results;
 using Mediora;
@@ -9,19 +8,19 @@ namespace CleanTemplate.Application.Products.Commands.UpdateProduct;
 
 public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, Result>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IProductWriteRepository _productWriteRepository;
     private readonly ILogger<UpdateProductCommandHandler> _logger;
 
-    public UpdateProductCommandHandler(IApplicationDbContext context, ILogger<UpdateProductCommandHandler> logger)
+    public UpdateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<UpdateProductCommandHandler> logger)
     {
-        _context = context;
+        _productWriteRepository = productWriteRepository;
         _logger = logger;
     }
 
     public async Task<Result> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
     {
-        var product = await _context
-            .FindByIdAsync(request.Id, cancellationToken)
+        var product = await _productWriteRepository
+            .GetByIdAsync(request.Id, cancellationToken)
             .ConfigureAwait(false);
 
         if (product is null)
@@ -32,7 +31,7 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
 
         product.Update(request.Name, request.Description, request.Price, request.Stock);
 
-        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _productWriteRepository.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Product updated successfully. ProductId {ProductId}", request.Id);
 

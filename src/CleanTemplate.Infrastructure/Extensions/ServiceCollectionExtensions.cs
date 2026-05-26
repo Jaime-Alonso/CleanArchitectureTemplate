@@ -4,6 +4,7 @@ using CleanTemplate.Infrastructure.Database;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;
 using CleanTemplate.Infrastructure.Repositories.Reads;
+using CleanTemplate.Infrastructure.Repositories.Writes;
 using CleanTemplate.Infrastructure.Security;
 using CleanTemplate.Infrastructure.Security.Options;
 using CleanTemplate.Application.Security;
@@ -130,6 +131,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<IProductReadRepository, ProductReadRepository>();
+        services.AddScoped<IProductWriteRepository, ProductWriteRepository>();
         services.AddScoped<IExternalRoleMapper, ExternalRoleMapper>();
         services.AddScoped<IExternalIdentityProvisioningService, ExternalIdentityProvisioningService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
