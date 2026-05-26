@@ -1,5 +1,5 @@
 using CleanTemplate.Application.Security;
-using CleanTemplate.Core.SharedKernel.Results;
+using CleanTemplate.SharedKernel.Results;
 using Mediora;
 
 namespace CleanTemplate.Application.Security.Commands.RefreshToken;

@@ -1,7 +1,7 @@
 using CleanTemplate.Application.Abstractions;
 using CleanTemplate.Application.Products;
-using CleanTemplate.Core.SharedKernel.Errors;
-using CleanTemplate.Core.SharedKernel.Results;
+using CleanTemplate.SharedKernel.Errors;
+using CleanTemplate.SharedKernel.Results;
 using Mediora;
 using Microsoft.Extensions.Logging;
 

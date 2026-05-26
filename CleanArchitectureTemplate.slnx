@@ -1,14 +1,17 @@
 <Solution>
-  <Folder Name="/01. Core/">
-    <Project Path="src/CleanTemplate.Core/CleanTemplate.Core.csproj" />
+  <Folder Name="/01. Shared Kernel/">
+    <Project Path="src/CleanTemplate.SharedKernel/CleanTemplate.SharedKernel.csproj" />
   </Folder>
-  <Folder Name="/02. Domain/">
+  <Folder Name="/02. Crosscutting/">
+    <Project Path="src/CleanTemplate.Crosscutting/CleanTemplate.Crosscutting.csproj" />
+  </Folder>
+  <Folder Name="/03. Domain/">
     <Project Path="src/CleanTemplate.Domain/CleanTemplate.Domain.csproj" />
   </Folder>
-  <Folder Name="/03. Application/">
+  <Folder Name="/04. Application/">
     <Project Path="src/CleanTemplate.Application/CleanTemplate.Application.csproj" />
   </Folder>
-  <Folder Name="/04. Infrastructure/">
+  <Folder Name="/05. Infrastructure/">
     <Project Path="src/CleanTemplate.Infrastructure/CleanTemplate.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/06. Api/">

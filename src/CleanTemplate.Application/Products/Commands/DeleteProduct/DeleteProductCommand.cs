@@ -1,5 +1,5 @@
 using Mediora;
-using CleanTemplate.Core.SharedKernel.Results;
+using CleanTemplate.SharedKernel.Results;
 
 namespace CleanTemplate.Application.Products.Commands.DeleteProduct;
 

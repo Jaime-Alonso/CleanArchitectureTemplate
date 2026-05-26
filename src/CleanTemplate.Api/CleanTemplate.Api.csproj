@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CleanTemplate.Application\CleanTemplate.Application.csproj" />
+    <ProjectReference Include="..\CleanTemplate.SharedKernel\CleanTemplate.SharedKernel.csproj" />
   </ItemGroup>
 
   <ItemGroup>

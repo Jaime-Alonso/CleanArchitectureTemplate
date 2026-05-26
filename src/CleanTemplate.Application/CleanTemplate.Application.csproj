@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CleanTemplate.Domain\CleanTemplate.Domain.csproj" />
+    <ProjectReference Include="..\CleanTemplate.SharedKernel\CleanTemplate.SharedKernel.csproj" />
   </ItemGroup>
 
   <ItemGroup>
