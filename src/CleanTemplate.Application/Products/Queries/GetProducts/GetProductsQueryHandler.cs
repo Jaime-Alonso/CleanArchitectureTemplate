@@ -1,10 +1,11 @@
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Common.Pagination;
 using CleanTemplate.Application.Products.ReadModels;
 using Mediora;
 
 namespace CleanTemplate.Application.Products.Queries.GetProducts;
 
-public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, IReadOnlyList<ProductListItemDto>>
+public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, PagedResult<ProductListItemDto>>
 {
     private readonly IProductReadRepository _productReadRepository;
 
@@ -13,7 +14,7 @@ public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, 
         _productReadRepository = productReadRepository;
     }
 
-    public async Task<IReadOnlyList<ProductListItemDto>> Handle(
+    public async Task<PagedResult<ProductListItemDto>> Handle(
         GetProductsQuery request,
         CancellationToken cancellationToken)
     {
@@ -32,7 +33,7 @@ public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, 
             .GetPagedAsync(criteria, cancellationToken)
             .ConfigureAwait(false);
 
-        return products
+        var items = products.Items
             .Select(product => new ProductListItemDto
             {
                 Id = product.Id,
@@ -41,5 +42,11 @@ public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, 
                 Stock = product.Stock
             })
             .ToList();
+
+        return PagedResult<ProductListItemDto>.Create(
+            items,
+            products.Page,
+            products.PageSize,
+            products.TotalCount);
     }
 }

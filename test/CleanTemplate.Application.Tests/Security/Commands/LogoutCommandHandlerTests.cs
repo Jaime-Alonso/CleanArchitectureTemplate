@@ -1,4 +1,4 @@
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Application.Security.Commands.Logout;
 using Microsoft.Extensions.Logging.Abstractions;

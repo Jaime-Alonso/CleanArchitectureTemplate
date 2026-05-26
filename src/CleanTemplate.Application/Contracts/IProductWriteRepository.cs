@@ -1,6 +1,6 @@
 using CleanTemplate.Domain.Entities;
 
-namespace CleanTemplate.Application.Abstractions;
+namespace CleanTemplate.Application.Contracts;
 
 public interface IProductWriteRepository
 {

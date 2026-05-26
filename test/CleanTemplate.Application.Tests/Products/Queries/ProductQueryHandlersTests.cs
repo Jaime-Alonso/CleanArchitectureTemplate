@@ -1,5 +1,6 @@
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Common.Criteria;
+using CleanTemplate.Application.Common.Pagination;
 using CleanTemplate.Application.Products.Queries.GetProductById;
 using CleanTemplate.Application.Products.Queries.GetProducts;
 using CleanTemplate.Application.Products.ReadModels;
@@ -34,7 +35,10 @@ public sealed class ProductQueryHandlersTests
 
         var result = await handler.Handle(new GetProductsQuery { Page = 2, PageSize = 5 }, CancellationToken.None);
 
-        Assert.Equal(expected, result);
+        Assert.Equal(expected, result.Items);
+        Assert.Equal(2, result.Page);
+        Assert.Equal(5, result.PageSize);
+        Assert.Equal(expected.Count, result.TotalCount);
         Assert.Equal(2, repository.LastPage);
         Assert.Equal(5, repository.LastPageSize);
         Assert.Equal("id", repository.LastSortBy);
@@ -118,7 +122,7 @@ public sealed class ProductQueryHandlersTests
             return Task.FromResult(Product);
         }
 
-        public Task<IReadOnlyList<ProductListItemReadModel>> GetPagedAsync(
+        public Task<PagedResult<ProductListItemReadModel>> GetPagedAsync(
             ProductSearchCriteria criteria,
             CancellationToken cancellationToken = default)
         {
@@ -126,7 +130,12 @@ public sealed class ProductQueryHandlersTests
             LastPageSize = criteria.NormalizedPageSize;
             LastSortBy = criteria.Sorting.NormalizedSortBy;
             LastSortDirection = criteria.Sorting.NormalizedSortDirection;
-            return Task.FromResult(PagedProducts);
+            return Task.FromResult(
+                PagedResult<ProductListItemReadModel>.Create(
+                    PagedProducts,
+                    LastPage,
+                    LastPageSize,
+                    PagedProducts.Count));
         }
     }
 }

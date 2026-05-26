@@ -1,6 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Security.Options;
 using Microsoft.Extensions.Options;

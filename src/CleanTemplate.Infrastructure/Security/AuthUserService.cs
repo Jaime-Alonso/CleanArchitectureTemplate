@@ -1,4 +1,4 @@
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;

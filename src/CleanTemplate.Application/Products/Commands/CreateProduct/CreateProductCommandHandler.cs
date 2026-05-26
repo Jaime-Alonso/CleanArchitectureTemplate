@@ -1,4 +1,4 @@
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Domain.Entities;
 using CleanTemplate.SharedKernel.Results;
 using Mediora;

@@ -3,7 +3,8 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Common.Pagination;
 using CleanTemplate.Application.Products.ReadModels;
 using CleanTemplate.Infrastructure.Database;
 using Dapper;
@@ -59,10 +60,15 @@ public sealed class ProductReadRepository : IProductReadRepository
         };
     }
 
-    public async Task<IReadOnlyList<ProductListItemReadModel>> GetPagedAsync(
+    public async Task<PagedResult<ProductListItemReadModel>> GetPagedAsync(
         ProductSearchCriteria criteria,
         CancellationToken cancellationToken = default)
     {
+        const string countSql = """
+            SELECT COUNT(*)
+            FROM "Products"
+            """;
+
         var sortField = MapSortField(criteria.Sorting.NormalizedSortBy);
         var isDescending = criteria.Sorting.NormalizedSortDirection == "desc";
         var offset = (criteria.NormalizedPage - 1) * criteria.NormalizedPageSize;
@@ -79,6 +85,11 @@ public sealed class ProductReadRepository : IProductReadRepository
             .CreateOpenConnectionAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var countCommand = new CommandDefinition(countSql, cancellationToken: cancellationToken);
+        var totalCount = await connection
+            .ExecuteScalarAsync<int>(countCommand)
+            .ConfigureAwait(false);
+
         var command = new CommandDefinition(
             sql,
             new { Offset = offset, PageSize = criteria.NormalizedPageSize },
@@ -87,7 +98,7 @@ public sealed class ProductReadRepository : IProductReadRepository
             .QueryAsync<ProductListItemRow>(command)
             .ConfigureAwait(false);
 
-        return result
+        var items = result
             .Select(row => new ProductListItemReadModel
             {
                 Id = row.Id,
@@ -96,6 +107,12 @@ public sealed class ProductReadRepository : IProductReadRepository
                 Stock = row.Stock
             })
             .ToList();
+
+        return PagedResult<ProductListItemReadModel>.Create(
+            items,
+            criteria.NormalizedPage,
+            criteria.NormalizedPageSize,
+            totalCount);
     }
 
     private sealed record ProductRow

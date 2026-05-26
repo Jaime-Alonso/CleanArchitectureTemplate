@@ -1,6 +1,6 @@
 using CleanTemplate.Application.Security;
 
-namespace CleanTemplate.Application.Abstractions;
+namespace CleanTemplate.Application.Contracts;
 
 /// <summary>
 /// Defines the contract for provisioning and synchronizing internal users from external identities.

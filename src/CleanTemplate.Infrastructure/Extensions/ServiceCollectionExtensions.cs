@@ -1,5 +1,5 @@
 using System;
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Infrastructure.Database;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;

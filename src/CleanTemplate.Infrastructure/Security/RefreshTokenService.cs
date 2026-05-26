@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;

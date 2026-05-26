@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Threading;
 using CleanTemplate.Api.Security.Options;
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;

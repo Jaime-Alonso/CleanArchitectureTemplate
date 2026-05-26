@@ -1,4 +1,4 @@
-namespace CleanTemplate.Application.Abstractions;
+namespace CleanTemplate.Application.Contracts;
 
 public interface IApplicationDbContext
 {

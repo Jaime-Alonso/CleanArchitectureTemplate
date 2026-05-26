@@ -1,4 +1,4 @@
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using Mediora;
 using Microsoft.Extensions.Logging;
 

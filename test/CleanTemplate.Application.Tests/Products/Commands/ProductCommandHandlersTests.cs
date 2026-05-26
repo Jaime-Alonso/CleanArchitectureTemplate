@@ -1,4 +1,4 @@
-using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Products.Commands.CreateProduct;
 using CleanTemplate.Application.Products.Commands.DeleteProduct;
 using CleanTemplate.Application.Products.Commands.UpdateProduct;
