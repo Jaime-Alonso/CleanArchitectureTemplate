@@ -1,4 +1,5 @@
 using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Common.Criteria;
 using CleanTemplate.Application.Products.Queries.GetProductById;
 using CleanTemplate.Application.Products.Queries.GetProducts;
 using CleanTemplate.Application.Products.ReadModels;
@@ -50,7 +51,7 @@ public sealed class ProductQueryHandlersTests
             new GetProductsQuery { Page = 1, PageSize = 10_000 },
             CancellationToken.None);
 
-        Assert.Equal(GetProductsQuery.MaxPageSize, repository.LastPageSize);
+        Assert.Equal(PaginationCriteria.MaxPageSize, repository.LastPageSize);
     }
 
     [Fact]
@@ -118,16 +119,13 @@ public sealed class ProductQueryHandlersTests
         }
 
         public Task<IReadOnlyList<ProductListItemReadModel>> GetPagedAsync(
-            int page,
-            int pageSize,
-            string sortBy,
-            string sortDirection,
+            ProductSearchCriteria criteria,
             CancellationToken cancellationToken = default)
         {
-            LastPage = page;
-            LastPageSize = pageSize;
-            LastSortBy = sortBy;
-            LastSortDirection = sortDirection;
+            LastPage = criteria.NormalizedPage;
+            LastPageSize = criteria.NormalizedPageSize;
+            LastSortBy = criteria.Sorting.NormalizedSortBy;
+            LastSortDirection = criteria.Sorting.NormalizedSortDirection;
             return Task.FromResult(PagedProducts);
         }
     }

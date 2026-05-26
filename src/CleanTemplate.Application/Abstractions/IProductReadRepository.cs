@@ -6,9 +6,6 @@ public interface IProductReadRepository
 {
     Task<ProductReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ProductListItemReadModel>> GetPagedAsync(
-        int page,
-        int pageSize,
-        string sortBy,
-        string sortDirection,
+        ProductSearchCriteria criteria,
         CancellationToken cancellationToken = default);
 }

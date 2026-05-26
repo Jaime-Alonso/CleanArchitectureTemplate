@@ -60,15 +60,12 @@ public sealed class ProductReadRepository : IProductReadRepository
     }
 
     public async Task<IReadOnlyList<ProductListItemReadModel>> GetPagedAsync(
-        int page,
-        int pageSize,
-        string sortBy,
-        string sortDirection,
+        ProductSearchCriteria criteria,
         CancellationToken cancellationToken = default)
     {
-        var sortField = MapSortField(sortBy);
-        var isDescending = sortDirection == "desc";
-        var offset = (page - 1) * pageSize;
+        var sortField = MapSortField(criteria.Sorting.NormalizedSortBy);
+        var isDescending = criteria.Sorting.NormalizedSortDirection == "desc";
+        var offset = (criteria.NormalizedPage - 1) * criteria.NormalizedPageSize;
 
         var sql = _sqlDialect.Paginate(
             """
@@ -84,7 +81,7 @@ public sealed class ProductReadRepository : IProductReadRepository
 
         var command = new CommandDefinition(
             sql,
-            new { Offset = offset, PageSize = pageSize },
+            new { Offset = offset, PageSize = criteria.NormalizedPageSize },
             cancellationToken: cancellationToken);
         var result = await connection
             .QueryAsync<ProductListItemRow>(command)

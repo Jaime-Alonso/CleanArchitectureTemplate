@@ -1,3 +1,5 @@
+using CleanTemplate.Application.Common.Criteria;
+using CleanTemplate.Application.Products.ReadModels;
 using Mediora;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -117,10 +119,10 @@ public static class ProductEndpoints
     {
         var query = new Application.Products.Queries.GetProducts.GetProductsQuery
         {
-            Page = page ?? Application.Products.Queries.GetProducts.GetProductsQuery.DefaultPage,
-            PageSize = pageSize ?? Application.Products.Queries.GetProducts.GetProductsQuery.DefaultPageSize,
-            SortBy = sortBy ?? Application.Products.Queries.GetProducts.GetProductsQuery.DefaultSortBy,
-            SortDirection = sortDirection ?? Application.Products.Queries.GetProducts.GetProductsQuery.DefaultSortDirection
+            Page = page ?? PaginationCriteria.DefaultPage,
+            PageSize = pageSize ?? PaginationCriteria.DefaultPageSize,
+            SortBy = sortBy ?? ProductSortingCriteria.DefaultSortBy,
+            SortDirection = sortDirection ?? SortingCriteria.DefaultSortDirection
         };
 
         var products = await sender.Send(query, cancellationToken);

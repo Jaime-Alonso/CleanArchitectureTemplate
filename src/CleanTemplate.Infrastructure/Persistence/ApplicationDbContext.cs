@@ -1,7 +1,5 @@
-using System;
 using CleanTemplate.Application.Abstractions;
 using CleanTemplate.Infrastructure.Identity;
-using CleanTemplate.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;

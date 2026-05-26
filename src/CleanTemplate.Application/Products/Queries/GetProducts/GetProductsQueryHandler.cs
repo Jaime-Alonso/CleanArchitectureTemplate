@@ -1,4 +1,5 @@
 using CleanTemplate.Application.Abstractions;
+using CleanTemplate.Application.Products.ReadModels;
 using Mediora;
 
 namespace CleanTemplate.Application.Products.Queries.GetProducts;
@@ -16,13 +17,19 @@ public sealed class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, 
         GetProductsQuery request,
         CancellationToken cancellationToken)
     {
-        var normalizedPage = GetProductsQuery.NormalizePage(request.Page);
-        var normalizedPageSize = GetProductsQuery.NormalizePageSize(request.PageSize);
-        var normalizedSortBy = GetProductsQuery.NormalizeSortBy(request.SortBy);
-        var normalizedSortDirection = GetProductsQuery.NormalizeSortDirection(request.SortDirection);
+        var criteria = new ProductSearchCriteria
+        {
+            Page = request.Page,
+            PageSize = request.PageSize,
+            Sorting = new ProductSortingCriteria
+            {
+                SortBy = request.SortBy,
+                SortDirection = request.SortDirection
+            }
+        };
 
         var products = await _productReadRepository
-            .GetPagedAsync(normalizedPage, normalizedPageSize, normalizedSortBy, normalizedSortDirection, cancellationToken)
+            .GetPagedAsync(criteria, cancellationToken)
             .ConfigureAwait(false);
 
         return products
