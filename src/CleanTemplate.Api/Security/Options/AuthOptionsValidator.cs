@@ -6,6 +6,11 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
 {
     public ValidateOptionsResult Validate(string? name, AuthOptions options)
     {
+        if (options.Provisioning.RoleGrantLifetimeMinutes is < 1 or > 60)
+        {
+            return ValidateOptionsResult.Fail("Auth:Provisioning:RoleGrantLifetimeMinutes must be between 1 and 60.");
+        }
+
         if (!options.Schemes.LocalJwt.Enabled && !options.Schemes.Oidc.Enabled)
         {
             return ValidateOptionsResult.Fail("At least one authentication scheme (LocalJwt or Oidc) must be enabled.");

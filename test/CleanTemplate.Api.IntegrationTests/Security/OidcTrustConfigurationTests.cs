@@ -11,6 +11,8 @@ public sealed class OidcTrustConfigurationTests
     [InlineData("Auth:Schemes:Oidc:Claims:EmailVerified", "")]
     [InlineData("Auth:Schemes:Oidc:Claims:TenantId", "")]
     [InlineData("Auth:Schemes:Oidc:AllowedTenantIds:0", " ")]
+    [InlineData("Auth:Provisioning:RoleGrantLifetimeMinutes", "0")]
+    [InlineData("Auth:Provisioning:RoleGrantLifetimeMinutes", "61")]
     public void InvalidProvisioningTrustConfiguration_IsRejected(string key, string value)
     {
         var values = new Dictionary<string, string?>

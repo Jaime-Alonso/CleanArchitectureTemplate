@@ -8,12 +8,14 @@ namespace CleanTemplate.Infrastructure.Security;
 public sealed class AuthUserService : IAuthUserService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserAuthorizationService _authorizationService;
     private readonly Dictionary<Guid, ApplicationUser> _usersById = [];
     private readonly Dictionary<string, ApplicationUser> _usersByLookup = new(StringComparer.OrdinalIgnoreCase);
 
-    public AuthUserService(UserManager<ApplicationUser> userManager)
+    public AuthUserService(UserManager<ApplicationUser> userManager, IUserAuthorizationService authorizationService)
     {
         _userManager = userManager;
+        _authorizationService = authorizationService;
     }
 
     public async Task<AuthUser?> FindByEmailOrUserNameAsync(string emailOrUserName, CancellationToken cancellationToken = default)
@@ -85,16 +87,8 @@ public sealed class AuthUserService : IAuthUserService
 
     public async Task<IReadOnlyCollection<string>> GetRolesAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var user = await FindUserByIdAsync(userId).ConfigureAwait(false);
-        if (user is null)
-        {
-            return [];
-        }
-
-        var roles = await _userManager.GetRolesAsync(user).ConfigureAwait(false);
-        return roles.ToArray();
+        var authorization = await _authorizationService.GetAsync(userId, cancellationToken).ConfigureAwait(false);
+        return authorization?.Roles ?? [];
     }
 
     private async Task<ApplicationUser?> FindUserByIdAsync(Guid userId)

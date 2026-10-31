@@ -329,7 +329,7 @@ A policy scheme named `Bearer` selects the concrete scheme automatically based o
 
 Only enabled schemes are registered. A token for a disabled scheme or a malformed token receives a Bearer `401` challenge; disabling a scheme never relaxes token validation. If `LocalJwt` is disabled, `/auth/login`, `/auth/refresh`, and `/auth/logout` are not mapped, and the local token generator rejects direct issuance. Disabling both schemes is an invalid configuration and fails startup validation. Changes to scheme enablement require an application restart.
 
-OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and expiration are still validated; reading the untrusted `iss` claim only chooses the validator. Account ownership and internal authorization are hardened as described below. Role revocation (T-03), concurrent provisioning (T-08), and refresh-session hardening (T-06/T-07) are still pending; the entire identity subsystem is not yet production-ready.
+OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and expiration are still validated; reading the untrusted `iss` claim only chooses the validator. Account ownership and internal authorization are hardened as described below. Role ownership/revocation is implemented with the bounds documented below; concurrent provisioning (T-08) and refresh-session hardening (T-06/T-07) remain pending. The entire identity subsystem is not yet production-ready.
 
 ### Decisions taken
 
@@ -357,7 +357,13 @@ OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and e
    - Fallback to `DefaultRole` (recommended: `User`).
 
 5. **Unified policy-based authorization**
-    - Endpoints are protected with internal policies (`AdminOnly`, `UserOrAdmin`) to keep behavior issuer-agnostic.
+     - Endpoints are protected with internal policies (`AdminOnly`, `UserOrAdmin`) to keep behavior issuer-agnostic.
+
+6. **Role ownership and revocation**
+   - Manual assignments remain in `AspNetUserRoles`. External roles are stored separately in `ExternalRoleGrants` per linked identity; synchronization removes only that source's obsolete grants.
+   - Current database permissions, not JWT role claims, authorize each request. Login, refresh and OIDC use the same effective union of manual roles and valid linked grants; no permission cache is used.
+   - External grants expire after `Auth:Provisioning:RoleGrantLifetimeMinutes` (default 5, allowed 1–60), capped by the external token's original expiration. An old but still-valid provider token may reassert old roles; this is not immediate IdP revocation.
+   - Deploy the new table and audit legacy mixed-origin role assignments before upgrading an existing database. See [role ownership and revocation](docs/security/role-ownership-and-revocation.md).
 
 See [the external identity trust model](docs/security/external-identity-trust.md) for configuration, account-linking design, migration implications and limitations. In particular, providers that do not emit an explicit trustworthy email-verification claim (including some Entra setups) cannot use the current JIT policy without a reviewed provider-specific integration. There is no public account-linking endpoint yet; do not restore email-based auto-linking as a workaround.
 

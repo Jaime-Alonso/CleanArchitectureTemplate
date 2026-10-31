@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using CleanTemplate.Api.Security.Options;
 using CleanTemplate.Application.Contracts;
@@ -12,6 +13,7 @@ namespace CleanTemplate.Api.Security;
 public sealed class ProvisioningClaimsTransformation(
     IOptions<AuthOptions> authOptions,
     IExternalIdentityProvisioningService provisioningService,
+    IUserAuthorizationService authorizationService,
     IHttpContextAccessor httpContextAccessor,
     ILogger<ProvisioningClaimsTransformation> logger) : IClaimsTransformation
 {
@@ -46,7 +48,12 @@ public sealed class ProvisioningClaimsTransformation(
                 && Guid.TryParse(GetSingleValue(source, "sub"), out var userId)
                 && userId != Guid.Empty)
             {
-                sanitized.AddIdentity(new InternalClaimsIdentity(userId, "LocalJwt", GetValues(source, ClaimTypes.Role)));
+                var authorization = await authorizationService.GetAsync(
+                    userId, httpContextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None).ConfigureAwait(false);
+                if (authorization is not null)
+                {
+                    sanitized.AddIdentity(new InternalClaimsIdentity(userId, "LocalJwt", authorization.Roles));
+                }
             }
 
             return sanitized;
@@ -60,9 +67,12 @@ public sealed class ProvisioningClaimsTransformation(
         var claims = _authOptions.Schemes.Oidc.Claims;
         var issuer = GetSingleValue(source, "iss");
         var subject = GetSingleValue(source, "sub");
-        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
+        var expiration = GetSingleValue(source, "exp");
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject)
+            || !long.TryParse(expiration, NumberStyles.None, CultureInfo.InvariantCulture, out var expiresAt)
+            || expiresAt is < 0 or > 253402300799)
         {
-            logger.LogWarning("External provisioning rejected: a unique issuer and subject are required");
+            logger.LogWarning("External provisioning rejected: a unique issuer, subject and valid expiration are required");
             return sanitized;
         }
 
@@ -71,6 +81,7 @@ public sealed class ProvisioningClaimsTransformation(
             Provider = _authOptions.Schemes.Oidc.Provider,
             Issuer = issuer,
             ProviderSubject = subject,
+            TokenExpiresAtUtc = DateTimeOffset.FromUnixTimeSeconds(expiresAt),
             Email = GetSingleValue(source, claims.Email),
             EmailVerified = bool.TryParse(GetSingleValue(source, claims.EmailVerified), out var verified) && verified,
             Name = GetSingleValue(source, claims.Name),

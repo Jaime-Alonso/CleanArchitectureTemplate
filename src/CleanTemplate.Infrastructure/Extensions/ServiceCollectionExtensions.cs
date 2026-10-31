@@ -65,6 +65,8 @@ public static class ServiceCollectionExtensions
         services
             .AddOptions<ExternalRoleMappingOptions>()
             .Bind(configuration.GetSection("Auth:Provisioning"))
+            .Validate(options => options.RoleGrantLifetimeMinutes is >= 1 and <= 60,
+                "Auth:Provisioning:RoleGrantLifetimeMinutes must be between 1 and 60.")
             .ValidateOnStart();
 
         services
@@ -171,6 +173,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IExternalIdentityProvisioningService, ExternalIdentityProvisioningService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IAuthUserService, AuthUserService>();
+        services.AddScoped<IUserAuthorizationService, UserAuthorizationService>();
         services.AddScoped<ILocalJwtTokenGenerator, LocalJwtTokenGenerator>();
         services.AddHostedService<RefreshTokenCleanupBackgroundService>();
 

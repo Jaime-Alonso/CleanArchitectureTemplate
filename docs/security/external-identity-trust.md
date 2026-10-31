@@ -1,6 +1,6 @@
 # External identity trust and internal authorization
 
-Status: T-01/T-02 implementation. Explicit account linking is designed below but has no public endpoint yet. Role synchronization/revocation (T-03), concurrent provisioning (T-08), and refresh-session hardening (T-06/T-07) remain separate work.
+Status: T-01/T-02/T-03 implementation. Explicit account linking is designed below but has no public endpoint yet. Concurrent provisioning (T-08) and refresh-session hardening (T-06/T-07) remain separate work. See [role ownership and revocation](role-ownership-and-revocation.md) for the permission model, bounds and mandatory legacy-role review.
 
 ## Trust boundary
 
@@ -30,7 +30,7 @@ Example configuration, with issuer/tenant values supplied for the actual deploym
         }
       }
     },
-    "Provisioning": { "Enabled": true }
+    "Provisioning": { "Enabled": true, "RoleGrantLifetimeMinutes": 5 }
   }
 }
 ```
@@ -50,12 +50,12 @@ This is an illustrative configuration, not a claim that every provider emits tid
 ## Internal authorization
 
 - All input identities are replaced by a sanitized validated identity. Reserved internal identifiers, role claims and their case variants are removed before exposing it to application authorization.
-- Local JWT roles are trusted only after local validation; the internal user ID is derived from the validated GUID sub, not from a supplied internal_user_id marker.
+- The internal user ID is derived from the validated local GUID sub, not from a supplied internal_user_id marker. Current roles are read from the database on each request; even locally signed JWT role claims are not authorization authority.
 - External tokens receive internal roles only from a successful IExternalIdentityProvisioningService result. External roles/groups may feed explicitly configured mapping rules, but do not authorize directly.
 - Email/domain mapping rules require EmailVerified even when the mapper is called directly.
 - Internal roles use the internal_role claim and an application-created InternalClaimsIdentity runtime type. AdminOnly and UserOrAdmin explicitly inspect this type. A signed external token containing internal_user_id, internal_role, auth_provider, ClaimTypes.Role or an AuthenticationType-like claim cannot create it.
 - Repeated transformation is idempotent based on this runtime type, never on a token marker. With provisioning disabled or rejected, external identities retain no internal roles.
-- The existing local JWT wire format remains compatible: locally signed ClaimTypes.Role values are converted to internal roles after validation. Internal-role claim names are not a new token-issuance contract.
+- The existing local JWT wire format remains compatible, but signed ClaimTypes.Role values are only an issuance-time snapshot. Manual roles and unexpired, linked external grants are resolved through the same reader for local and external flows. Internal-role claim names are not a new token-issuance contract.
 
 ## Explicit account linking: design only
 
@@ -72,17 +72,18 @@ Until that work exists, operators must use a separately reviewed administrative 
 
 ## Compatibility and rollout
 
-This changes how external logins are keyed and therefore requires an explicit rollout plan for existing databases. It does not change the Identity table schema, but it is a **behavioral/data-key compatibility change**.
+This changes how external logins are keyed and therefore requires an explicit rollout plan for existing databases. T-03 additionally introduces the ExternalRoleGrants table and a role-ownership compatibility change; reviewed migrations and a legacy-role audit are required before deployment.
 
 - Legacy logins stored as Provider + Subject are not automatically migrated or trusted. If their email collides, provisioning is rejected without altering the account or its roles.
 - Do not infer the original issuer from a display alias or a current token. Establish the canonical original issuer/subject through reliable administrative evidence, review collisions and tenants, and back up before a controlled data migration to the hashed keys.
 - Review registered provider claims before enabling provisioning. Previously accepted users without verified email may now be denied internal permissions.
 - Change external enablement/tenant configuration through controlled deployment and restart the application; do not rely on partial live reload of authentication options.
-- Add-only role synchronization remains in place until T-03. Persisted obsolete roles can still affect local sessions; removing the provisioning cache does not complete revocation. Concurrent first access can still leave partial work until T-08 adds transactional guarantees. Do not declare external identity production-ready on the strength of T-01/T-02 alone.
+- Synchronization now removes obsolete grants belonging to the current login without altering manual assignments. Legacy mixed-origin AspNetUserRoles rows cannot be classified automatically and require review. Still-valid provider JWTs can reassert old roles until their original expiration; the configured grant TTL is not a promise of instantaneous IdP revocation. See the linked role policy for exact bounds.
+- Concurrent first access can still leave partial work until T-08 adds transactional guarantees. Do not declare external identity production-ready on the strength of these increments alone.
 
 ## Verification
 
 - Relational SQLite/Identity tests exercise email collisions, verification, exact issuer/subject separation, stable profile updates, tenant changes and refusal to silently migrate legacy logins.
 - HTTP tests validate signed JWTs with static test metadata; they exercise spoofed internal claims, sanitized roles, tenant restrictions, duplicate claims, disabled provisioning and repeated transformation. They do not contact a real provider.
 - A full-host test verifies that a User token can read products but cannot create, update or delete them. Existing Admin CRUD tests remain part of the regression suite.
-- Real-provider and production-engine testing, migration rehearsals, role revocation and concurrent provisioning remain required before production.
+- Role tests additionally verify TTL, local-token permission re-evaluation, manual/source ownership and atomic grant replacement. Real-provider and production-engine testing, migration rehearsals, legacy-role review and concurrent provisioning remain required before production.

@@ -144,15 +144,15 @@ public sealed class InternalAuthorizationTests
     [Theory]
     [InlineData("User", HttpStatusCode.Forbidden)]
     [InlineData("Admin", HttpStatusCode.OK)]
-    public async Task LocalJwt_UsesValidatedSubjectAndLocalRoles(string role, HttpStatusCode expectedWriteStatus)
+    public async Task LocalJwt_UsesValidatedSubjectAndCurrentInternalRoles(string role, HttpStatusCode expectedWriteStatus)
     {
         var provisioning = new ProvisioningStub();
-        using var host = CreateHost(provisioning);
+        using var host = CreateHost(provisioning, authorization: new AuthorizationStub { Roles = [role] });
         var localUserId = Guid.NewGuid();
         using var client = Client(host, Token(LocalIssuer,
         [
             new Claim("sub", localUserId.ToString()),
-            new Claim(ClaimTypes.Role, role),
+            new Claim(ClaimTypes.Role, "Admin"),
             new Claim(InternalClaimTypes.InternalUserId, Guid.NewGuid().ToString())
         ]));
 
@@ -163,6 +163,60 @@ public sealed class InternalAuthorizationTests
         Assert.StartsWith(localUserId.ToString(), await read.Content.ReadAsStringAsync());
         Assert.Equal(expectedWriteStatus, write.StatusCode);
         Assert.Equal(0, provisioning.Calls);
+    }
+
+    [Fact]
+    public async Task ExistingLocalToken_LosesAdministratorAccessOnTheNextRequest()
+    {
+        var authorization = new AuthorizationStub { Roles = ["Admin"] };
+        using var host = CreateHost(new ProvisioningStub(), authorization: authorization);
+        using var client = Client(host, Token(LocalIssuer,
+        [
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, "Admin")
+        ]));
+        using var before = await client.PostAsync("/write", null);
+        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+
+        authorization.Roles = ["User"];
+
+        using var after = await client.PostAsync("/write", null);
+        using var read = await client.GetAsync("/read");
+        Assert.Equal(HttpStatusCode.Forbidden, after.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+    }
+
+    [Fact]
+    public async Task MissingOrLockedLocalAccount_CannotUseItsSignedAdministratorClaims()
+    {
+        using var host = CreateHost(new ProvisioningStub(), authorization: new AuthorizationStub { Unavailable = true });
+        using var client = Client(host, Token(LocalIssuer,
+        [
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, "Admin")
+        ]));
+
+        using var response = await client.PostAsync("/write", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PermissionStoreFailure_DoesNotFallBackToSignedTokenRoles()
+    {
+        using var host = CreateHost(new ProvisioningStub(), authorization: new AuthorizationStub { Fail = true });
+        using var client = Client(host, Token(LocalIssuer,
+        [
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, "Admin")
+        ]));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            using var response = await client.PostAsync("/write", null);
+        });
+
+        Assert.Equal("Permission store unavailable.", error.Message);
     }
 
     [Theory]
@@ -223,7 +277,8 @@ public sealed class InternalAuthorizationTests
         Assert.Equal(1, provisioning.Calls);
     }
 
-    private static IHost CreateHost(ProvisioningStub provisioning, bool provisioningEnabled = true, string? allowedTenant = null)
+    private static IHost CreateHost(ProvisioningStub provisioning, bool provisioningEnabled = true, string? allowedTenant = null,
+        IUserAuthorizationService? authorization = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -245,6 +300,7 @@ public sealed class InternalAuthorizationTests
                 services.AddRouting();
                 services.AddApiSecurity(configuration);
                 services.AddSingleton<IExternalIdentityProvisioningService>(provisioning);
+                services.AddSingleton<IUserAuthorizationService>(authorization ?? new AuthorizationStub());
                 services.PostConfigure<JwtBearerOptions>("Oidc", options =>
                 {
                     var metadata = new OpenIdConnectConfiguration { Issuer = ExternalIssuer };
@@ -335,6 +391,23 @@ public sealed class InternalAuthorizationTests
                     InternalRoles = Roles,
                     ProvisioningOccurred = false
                 }));
+        }
+    }
+
+    private sealed class AuthorizationStub : IUserAuthorizationService
+    {
+        public IReadOnlyCollection<string> Roles { get; set; } = ["User"];
+        public bool Unavailable { get; set; }
+        public bool Fail { get; set; }
+
+        public Task<UserAuthorization?> GetAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            if (Fail)
+            {
+                throw new InvalidOperationException("Permission store unavailable.");
+            }
+
+            return Task.FromResult(Unavailable ? null : new UserAuthorization(userId, Roles));
         }
     }
 }

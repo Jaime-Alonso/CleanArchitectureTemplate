@@ -163,6 +163,7 @@ public sealed class AuthenticationSchemeTests
             {
                 services.AddApiSecurity(CreateConfiguration(localEnabled, oidcEnabled));
                 services.AddScoped<IExternalIdentityProvisioningService, UnexpectedProvisioningService>();
+                services.AddScoped<IUserAuthorizationService, UnexpectedAuthorizationService>();
                 services.PostConfigure<JwtBearerOptions>("Oidc", options =>
                 {
                     var metadata = new OpenIdConnectConfiguration { Issuer = ExternalIssuer };
@@ -225,6 +226,14 @@ public sealed class AuthenticationSchemeTests
         public Task<Result<ProvisionResult>> ProvisionAsync(ExternalIdentity externalIdentity, CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("Provisioning is disabled in this authentication-only fixture.");
+        }
+    }
+
+    private sealed class UnexpectedAuthorizationService : IUserAuthorizationService
+    {
+        public Task<UserAuthorization?> GetAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("This fixture uses no valid local user IDs and must not query internal permissions.");
         }
     }
 }

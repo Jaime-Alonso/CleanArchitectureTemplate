@@ -20,6 +20,7 @@ public sealed class ExternalRoleMapperTests
         {
             Provider = "Oidc",
             Issuer = "https://identity.test",
+            TokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(5),
             ProviderSubject = "subject",
             Email = "admin@example.test",
             EmailVerified = verified
@@ -44,6 +45,7 @@ public sealed class ExternalRoleMapperTests
         {
             Provider = "Oidc",
             Issuer = "https://identity.test",
+            TokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(5),
             ProviderSubject = "sub-1",
             EmailVerified = true,
             Email = "admin@contoso.com"
@@ -66,6 +68,7 @@ public sealed class ExternalRoleMapperTests
         {
             Provider = "Oidc",
             Issuer = "https://identity.test",
+            TokenExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(5),
             ProviderSubject = "sub-2",
             Email = "john@unknown.com"
         };
