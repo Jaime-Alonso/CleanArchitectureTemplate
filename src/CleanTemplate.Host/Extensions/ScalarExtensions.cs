@@ -15,16 +15,10 @@ public static class ScalarExtensions
         {
             options.GroupNameFormat = "'v'VVV";
             options.SubstituteApiVersionInUrl = false;
-        });
-
-        services.AddOpenApi("v1", options =>
+        }).AddOpenApi(options =>
         {
-            options.AddDocumentTransformer(new ApiVersionDocumentTransformer("v1"));
-        });
-
-        services.AddOpenApi("v2", options =>
-        {
-            options.AddDocumentTransformer(new ApiVersionDocumentTransformer("v2"));
+            options.Document.AddDocumentTransformer(
+                new ApiVersionDocumentTransformer(options.Description.GroupName));
         });
 
         return services;

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using CleanTemplate.Api.IntegrationTests.Infrastructure;
 
 namespace CleanTemplate.Api.IntegrationTests.Endpoints;
@@ -34,6 +35,29 @@ public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplica
         Assert.False(string.IsNullOrWhiteSpace(payload.AccessToken));
         Assert.False(string.IsNullOrWhiteSpace(payload.RefreshToken));
         Assert.Equal("Bearer", payload.TokenType);
+    }
+
+    [Fact]
+    public async Task GetOpenApi_ForApiVersion_ReturnsMatchingDocument()
+    {
+        using var client = CreateClient("198.51.100.20");
+        using var response = await client.GetAsync("/openapi/v1.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>();
+        Assert.NotNull(document);
+        Assert.Equal("v1", document.RootElement.GetProperty("info").GetProperty("version").GetString());
+        Assert.NotEmpty(document.RootElement.GetProperty("paths").EnumerateObject());
+    }
+
+    [Fact]
+    public async Task GetOpenApi_ForUnregisteredApiVersion_ReturnsNotFound()
+    {
+        using var client = CreateClient("198.51.100.21");
+        using var response = await client.GetAsync("/openapi/v2.json");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

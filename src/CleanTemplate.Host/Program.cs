@@ -54,7 +54,7 @@ try
 
     if (app.Environment.IsDevelopment())
     {
-        app.MapOpenApi();
+        app.MapOpenApi().WithDocumentPerVersion();
         app.UseScalarDocumentation();
     }
 
