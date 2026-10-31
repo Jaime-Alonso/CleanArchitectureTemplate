@@ -1,11 +1,14 @@
 using CleanTemplate.Api.Endpoints.Contracts.Auth;
 using CleanTemplate.Api.Extensions;
+using CleanTemplate.Api.Security.Options;
 using CleanTemplate.Application.Security.Commands.Login;
 using CleanTemplate.Application.Security.Commands.Logout;
 using CleanTemplate.Application.Security.Commands.RefreshToken;
 using Mediora;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace CleanTemplate.Api.Endpoints;
 
@@ -13,6 +16,11 @@ public static class AuthEndpoints
 {
     public static WebApplication MapAuthEndpoints(this WebApplication app)
     {
+        if (!app.Services.GetRequiredService<IOptions<AuthOptions>>().Value.Schemes.LocalJwt.Enabled)
+        {
+            return app;
+        }
+
         var group = app.MapGroup("/auth");
 
         group.MapPost("/login", Login)

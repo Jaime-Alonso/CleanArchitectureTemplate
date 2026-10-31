@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using CleanTemplate.Api.Security.Options;
+using CleanTemplate.Application.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
@@ -24,7 +25,10 @@ public static class AuthServiceCollectionExtensions
 
         services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsValidator>();
 
-        services.AddAuthentication(options =>
+        // Scheme registration and routing are a startup snapshot. Changing Enabled requires a restart.
+        var configuredOptions = configuration.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions();
+
+        var authentication = services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = "Bearer";
                 options.DefaultChallengeScheme = "Bearer";
@@ -33,27 +37,37 @@ public static class AuthServiceCollectionExtensions
             {
                 options.ForwardDefaultSelector = context =>
                 {
-                    var authOptions = context.RequestServices.GetRequiredService<IOptionsMonitor<AuthOptions>>().CurrentValue;
-                    return SelectScheme(context, authOptions);
+                    return SelectScheme(context, configuredOptions);
                 };
             })
-            .AddJwtBearer("LocalJwt", _ => { })
-            .AddJwtBearer("Oidc", _ => { });
+            .AddScheme<AuthenticationSchemeOptions, RejectedBearerHandler>(RejectedBearerHandler.SchemeName, _ => { });
 
-        services
-            .AddOptions<JwtBearerOptions>("LocalJwt")
-            .Configure<IOptions<AuthOptions>>((jwtOptions, authOptions) =>
-                ConfigureLocalJwt(jwtOptions, authOptions.Value.Schemes.LocalJwt));
+        if (configuredOptions.Schemes.LocalJwt.Enabled)
+        {
+            authentication.AddJwtBearer("LocalJwt", _ => { });
+            services
+                .AddOptions<JwtBearerOptions>("LocalJwt")
+                .Configure<IOptions<AuthOptions>>((jwtOptions, authOptions) =>
+                    ConfigureLocalJwt(jwtOptions, authOptions.Value.Schemes.LocalJwt));
+        }
 
-        services
-            .AddOptions<JwtBearerOptions>("Oidc")
-            .Configure<IOptions<AuthOptions>>((jwtOptions, authOptions) =>
-                ConfigureOidcJwt(jwtOptions, authOptions.Value.Schemes.Oidc));
+        if (configuredOptions.Schemes.Oidc.Enabled)
+        {
+            authentication.AddJwtBearer("Oidc", _ => { });
+            services
+                .AddOptions<JwtBearerOptions>("Oidc")
+                .Configure<IOptions<AuthOptions>>((jwtOptions, authOptions) =>
+                    ConfigureOidcJwt(jwtOptions, authOptions.Value.Schemes.Oidc));
+        }
 
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-            options.AddPolicy("UserOrAdmin", policy => policy.RequireRole("User", "Admin"));
+            options.AddPolicy("AdminOnly", policy => policy
+                .RequireAuthenticatedUser()
+                .RequireAssertion(context => HasInternalRole(context.User, "Admin")));
+            options.AddPolicy("UserOrAdmin", policy => policy
+                .RequireAuthenticatedUser()
+                .RequireAssertion(context => HasInternalRole(context.User, "User", "Admin")));
         });
 
         services.AddTransient<IClaimsTransformation, ProvisioningClaimsTransformation>();
@@ -66,7 +80,7 @@ public static class AuthServiceCollectionExtensions
         var authorization = context.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization) || !authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            return authOptions.Schemes.LocalJwt.Enabled ? "LocalJwt" : "Oidc";
+            return RejectedBearerHandler.SchemeName;
         }
 
         var token = authorization["Bearer ".Length..].Trim();
@@ -74,37 +88,33 @@ public static class AuthServiceCollectionExtensions
         try
         {
             var jwtToken = new JsonWebTokenHandler().ReadJsonWebToken(token);
-            if (string.Equals(jwtToken.Issuer, authOptions.Schemes.LocalJwt.Issuer, StringComparison.OrdinalIgnoreCase))
+            // Reading iss only selects a validator; it never establishes trust in the token.
+            if (string.Equals(jwtToken.Issuer, authOptions.Schemes.LocalJwt.Issuer, StringComparison.Ordinal))
             {
-                return "LocalJwt";
+                return authOptions.Schemes.LocalJwt.Enabled ? "LocalJwt" : RejectedBearerHandler.SchemeName;
             }
 
-            return "Oidc";
+            return authOptions.Schemes.Oidc.Enabled ? "Oidc" : RejectedBearerHandler.SchemeName;
         }
         catch
         {
-            return authOptions.Schemes.LocalJwt.Enabled ? "LocalJwt" : "Oidc";
+            return RejectedBearerHandler.SchemeName;
         }
+    }
+
+    private static bool HasInternalRole(ClaimsPrincipal principal, params string[] roles)
+    {
+        return principal.Identities.OfType<InternalClaimsIdentity>()
+            .Any(identity => identity.IsAuthenticated && roles.Any(role => identity.HasClaim(InternalClaimTypes.Role, role)));
     }
 
     private static void ConfigureLocalJwt(JwtBearerOptions options, LocalJwtOptions localJwt)
     {
-        if (!localJwt.Enabled)
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ValidateIssuerSigningKey = false,
-                ValidateLifetime = false
-            };
-            return;
-        }
-
         options.RequireHttpsMetadata = true;
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
+            AuthenticationType = "LocalJwt",
             ValidateIssuer = true,
             ValidIssuer = localJwt.Issuer,
             ValidateAudience = true,
@@ -120,30 +130,36 @@ public static class AuthServiceCollectionExtensions
 
     private static void ConfigureOidcJwt(JwtBearerOptions options, OidcOptions oidc)
     {
-        if (!oidc.Enabled)
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = false,
-                ValidateAudience = false,
-                ValidateIssuerSigningKey = false,
-                ValidateLifetime = false
-            };
-            return;
-        }
-
         options.Authority = oidc.Authority;
         options.Audience = oidc.Audience;
         options.RequireHttpsMetadata = true;
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
+            AuthenticationType = "Oidc",
             ValidateIssuer = true,
             ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1),
             RoleClaimType = ClaimTypes.Role,
             NameClaimType = "sub"
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (oidc.AllowedTenantIds.Count > 0)
+                {
+                    var tenants = context.Principal?.Claims.Where(claim => claim.Type == oidc.Claims.TenantId).Take(2).ToArray() ?? [];
+                    if (tenants.Length != 1 || !oidc.AllowedTenantIds.Contains(tenants[0].Value, StringComparer.Ordinal))
+                    {
+                        context.Fail("The token tenant is not allowed.");
+                    }
+                }
+
+                return Task.CompletedTask;
+            }
         };
     }
 }

@@ -13,19 +13,27 @@ The template is designed to be:
 ## Before You Start
 
 > [!IMPORTANT]
-> Before running the host for the first time, configure at least the admin seed credentials in user-secrets.
-> Without these values, the app cannot provision the initial admin user correctly in development.
+> Before running the host for the first time, configure a JWT signing key and admin seed password outside the repository.
+> The committed development settings deliberately contain no usable credentials. Missing secrets cause configuration validation to fail.
 
-```json
-{
-  "IdentitySeed": {
-    "AdminEmail": "admin@local.template",
-    "AdminPassword": "Test005!"
-  }
-}
+With PowerShell 7.2 or later and the .NET SDK, initialize unique local values:
+
+```powershell
+.\scripts\Initialize-DevelopmentSecrets.ps1
+dotnet run --project src/CleanTemplate.Host/CleanTemplate.Host.csproj --environment Development
 ```
 
-You can set these values with `dotnet user-secrets` for the Host project, or by using your preferred secret manager in your environment.
+The script uses cryptographic randomness, writes JSON through stdin to `dotnet user-secrets`, never prints secret values, and preserves existing values. The Host includes a `UserSecretsId`, so ASP.NET Core loads them automatically in Development.
+
+Inspect the generated password locally with `dotnet user-secrets --project src/CleanTemplate.Host/CleanTemplate.Host.csproj list` **only in a private terminal**; that command displays sensitive values. Alternatively, set your own password through your local secret-management tooling. User-secrets are not encrypted and are not a production secret store.
+
+Use `-Rotate` only deliberately: replacing the signing key invalidates existing access tokens. Updating the seed password does not change the password of an existing database account. For production, use environment variables or a managed secret store.
+
+The bootstrap can be tested without altering your own secrets:
+
+```powershell
+.\scripts\tests\Test-DevelopmentSecrets.ps1
+```
 
 ### Rename
 
@@ -319,6 +327,10 @@ This template includes a hybrid authentication model with two JWT issuers:
 
 A policy scheme named `Bearer` selects the concrete scheme automatically based on the incoming token issuer (`iss`), so clients always send `Authorization: Bearer <token>` and the API resolves the validator.
 
+Only enabled schemes are registered. A token for a disabled scheme or a malformed token receives a Bearer `401` challenge; disabling a scheme never relaxes token validation. If `LocalJwt` is disabled, `/auth/login`, `/auth/refresh`, and `/auth/logout` are not mapped, and the local token generator rejects direct issuance. Disabling both schemes is an invalid configuration and fails startup validation. Changes to scheme enablement require an application restart.
+
+OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and expiration are still validated; reading the untrusted `iss` claim only chooses the validator. Account ownership and internal authorization are hardened as described below. Role revocation (T-03), concurrent provisioning (T-08), and refresh-session hardening (T-06/T-07) are still pending; the entire identity subsystem is not yet production-ready.
+
 ### Decisions taken
 
 1. **Identity is the internal source of truth**
@@ -326,22 +338,28 @@ A policy scheme named `Bearer` selects the concrete scheme automatically based o
    - Internal roles are standardized as `Admin` and `User`.
 
 2. **Provisioning strategy: Option B (JIT + internal mapping)**
-   - OIDC users are provisioned just-in-time and linked by `provider + sub`.
+    - OIDC users are provisioned just-in-time using the exact validated `issuer + sub` pair. Bounded SHA-256-derived login keys are stored in Identity; the configured provider name is only a display label.
+    - A verified email is required; verification is never inferred from email presence. Matching an existing account's email rejects provisioning rather than linking the accounts.
+    - `Auth:Schemes:Oidc:AllowedTenantIds` optionally restricts tenants before provisioning. A linked account cannot silently change tenant.
+    - Provisioning decisions are not cached. Legacy `provider + sub` logins are not automatically migrated.
    - Authorization is always based on internal roles, never on external roles directly.
 
 3. **Claims transformation as integration point**
-   - `IClaimsTransformation` converts external identity into stable internal claims before authorization.
-   - Internal claims emitted include `internal_user_id`, `role`, and `auth_provider`.
+    - `IClaimsTransformation` strips supplied internal markers/roles and creates an application-owned runtime identity after validated local authentication or successful external provisioning.
+    - Internal claims emitted include `internal_user_id`, `internal_role`, and `auth_provider`. Policy authorization checks the application's identity type, not a token-supplied marker.
+    - OIDC without provisioning may authenticate, but has no internal permissions, regardless of external role claims.
 
 4. **Role mapping precedence**
-   - Admin by exact email.
-   - Admin by email domain.
+    - Admin by verified exact email.
+    - Admin by verified email domain.
    - Admin by external group.
    - Admin by external role.
    - Fallback to `DefaultRole` (recommended: `User`).
 
 5. **Unified policy-based authorization**
-   - Endpoints are protected with internal policies (`AdminOnly`, `UserOrAdmin`) to keep behavior issuer-agnostic.
+    - Endpoints are protected with internal policies (`AdminOnly`, `UserOrAdmin`) to keep behavior issuer-agnostic.
+
+See [the external identity trust model](docs/security/external-identity-trust.md) for configuration, account-linking design, migration implications and limitations. In particular, providers that do not emit an explicit trustworthy email-verification claim (including some Entra setups) cannot use the current JIT policy without a reviewed provider-specific integration. There is no public account-linking endpoint yet; do not restore email-based auto-linking as a workaround.
 
 ### Configuration overview
 

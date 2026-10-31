@@ -1,171 +1,137 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;
+using CleanTemplate.SharedKernel.Errors;
+using CleanTemplate.SharedKernel.Results;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Infrastructure.Security;
 
 /// <summary>
-/// Provisions and synchronizes an internal <see cref="ApplicationUser"/> from an external identity provider
-/// (for example OIDC) and maps external roles to internal application roles.
+/// Provisions identities from already validated tokens using exact issuer/subject keys.
+/// Email is a verified profile attribute, never proof of ownership of an existing account.
 /// </summary>
-/// <remarks>
-/// The service is idempotent for the same provider/subject and uses a short-lived in-memory cache to avoid
-/// repeating provisioning work for repeated token transformations.
-/// </remarks>
-public sealed class ExternalIdentityProvisioningService : IExternalIdentityProvisioningService
+public sealed class ExternalIdentityProvisioningService(
+    UserManager<ApplicationUser> userManager,
+    IExternalRoleMapper externalRoleMapper,
+    ILogger<ExternalIdentityProvisioningService> logger) : IExternalIdentityProvisioningService
 {
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
-
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IExternalRoleMapper _externalRoleMapper;
-    private readonly ICacheService _cacheService;
-    private readonly ILogger<ExternalIdentityProvisioningService> _logger;
-
-    public ExternalIdentityProvisioningService(
-        UserManager<ApplicationUser> userManager,
-        IExternalRoleMapper externalRoleMapper,
-        ICacheService cacheService,
-        ILogger<ExternalIdentityProvisioningService> logger)
-    {
-        _userManager = userManager;
-        _externalRoleMapper = externalRoleMapper;
-        _cacheService = cacheService;
-        _logger = logger;
-    }
-
-    /// <summary>
-    /// Ensures the external identity is linked to an internal user, updates profile fields,
-    /// associates external login information, and assigns mapped internal roles.
-    /// </summary>
-    /// <param name="externalIdentity">Identity data extracted from the external token/claims.</param>
-    /// <param name="cancellationToken">Cancellation token for the provisioning operation.</param>
-    /// <returns>
-    /// A <see cref="ProvisionResult"/> containing the internal user identifier, resolved internal roles,
-    /// and whether changes were applied during this execution.
-    /// </returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when user creation, user update, login association, or role assignment fails.
-    /// </exception>
-    public async Task<ProvisionResult> ProvisionAsync(
+    public async Task<Result<ProvisionResult>> ProvisionAsync(
         ExternalIdentity externalIdentity,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var cacheKey = $"external-provisioning:{externalIdentity.Provider}:{externalIdentity.ProviderSubject}";
-
-        return await _cacheService.GetOrSetAsync(
-            cacheKey,
-            _ => ProvisionInternalAsync(externalIdentity, cancellationToken),
-            CacheDuration,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<ProvisionResult> ProvisionInternalAsync(ExternalIdentity externalIdentity, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var provisioningOccurred = false;
-        var user = await _userManager.FindByLoginAsync(externalIdentity.Provider, externalIdentity.ProviderSubject).ConfigureAwait(false);
-
-        if (user is null && !string.IsNullOrWhiteSpace(externalIdentity.Email))
+        if (string.IsNullOrWhiteSpace(externalIdentity.Issuer) || string.IsNullOrWhiteSpace(externalIdentity.ProviderSubject))
         {
-            user = await _userManager.FindByEmailAsync(externalIdentity.Email).ConfigureAwait(false);
+            return Reject("Auth.InvalidExternalIdentity");
         }
 
+        // Identity requires unique email in this template. Do not infer verification from its presence.
+        if (!externalIdentity.EmailVerified || string.IsNullOrWhiteSpace(externalIdentity.Email))
+        {
+            return Reject("Auth.ExternalEmailNotVerified");
+        }
+
+        // Hash exact values (no case folding/URL normalization) to fit Identity's bounded login keys.
+        // Provider is only a display label: changing it must not change ownership.
+        var loginProvider = $"oidc:{Hash(externalIdentity.Issuer)}";
+        var providerKey = Hash(externalIdentity.ProviderSubject);
+        var user = await userManager.FindByLoginAsync(loginProvider, providerKey).ConfigureAwait(false);
+        var emailOwner = await userManager.FindByEmailAsync(externalIdentity.Email).ConfigureAwait(false);
+        if (emailOwner is not null && emailOwner.Id != user?.Id)
+        {
+            // Even a verified email cannot automatically link a local account or another external login.
+            return Reject("Auth.ExternalAccountLinkRequired");
+        }
+
+        var provisioningOccurred = false;
         if (user is null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
             user = new ApplicationUser
             {
                 Id = Guid.NewGuid(),
+                UserName = $"external-{Hash(JsonSerializer.Serialize(new[] { externalIdentity.Issuer, externalIdentity.ProviderSubject }))}",
                 Email = externalIdentity.Email,
-                UserName = externalIdentity.Email ?? $"{externalIdentity.Provider}:{externalIdentity.ProviderSubject}",
+                EmailConfirmed = true,
                 DisplayName = externalIdentity.Name,
-                TenantId = externalIdentity.TenantId,
-                EmailConfirmed = !string.IsNullOrWhiteSpace(externalIdentity.Email)
+                TenantId = externalIdentity.TenantId
             };
 
-            var createResult = await _userManager.CreateAsync(user).ConfigureAwait(false);
+            var createResult = await userManager.CreateAsync(user).ConfigureAwait(false);
             if (!createResult.Succeeded)
             {
-                throw new InvalidOperationException($"Unable to create user from external identity: {string.Join(", ", createResult.Errors.Select(e => e.Description))}");
+                return Reject("Auth.ExternalProfileRejected");
+            }
+
+            var loginResult = await userManager.AddLoginAsync(user, new UserLoginInfo(
+                loginProvider, providerKey, externalIdentity.Provider)).ConfigureAwait(false);
+            if (!loginResult.Succeeded)
+            {
+                return Reject("Auth.ExternalLoginRejected");
             }
 
             provisioningOccurred = true;
         }
-
-        if (!string.Equals(user.DisplayName, externalIdentity.Name, StringComparison.Ordinal))
+        else
         {
-            user.DisplayName = externalIdentity.Name;
-            provisioningOccurred = true;
-        }
-
-        if (!string.Equals(user.TenantId, externalIdentity.TenantId, StringComparison.Ordinal))
-        {
-            user.TenantId = externalIdentity.TenantId;
-            provisioningOccurred = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(externalIdentity.Email) && !string.Equals(user.Email, externalIdentity.Email, StringComparison.OrdinalIgnoreCase))
-        {
-            user.Email = externalIdentity.Email;
-            user.UserName = externalIdentity.Email;
-            provisioningOccurred = true;
-        }
-
-        if (provisioningOccurred)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var updateResult = await _userManager.UpdateAsync(user).ConfigureAwait(false);
-            if (!updateResult.Succeeded)
+            if (!string.Equals(user.TenantId, externalIdentity.TenantId, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException($"Unable to update user from external identity: {string.Join(", ", updateResult.Errors.Select(e => e.Description))}");
+                return Reject("Auth.ExternalTenantChanged");
+            }
+
+            if (!string.Equals(user.Email, externalIdentity.Email, StringComparison.Ordinal)
+                || !string.Equals(user.DisplayName, externalIdentity.Name, StringComparison.Ordinal)
+                || !user.EmailConfirmed)
+            {
+                user.Email = externalIdentity.Email;
+                user.EmailConfirmed = true;
+                user.DisplayName = externalIdentity.Name;
+                // Keep the stable external username; profile changes never change account identity.
+                var updateResult = await userManager.UpdateAsync(user).ConfigureAwait(false);
+                if (!updateResult.Succeeded)
+                {
+                    return Reject("Auth.ExternalProfileRejected");
+                }
+
+                provisioningOccurred = true;
             }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-
-        var addLoginResult = await _userManager.AddLoginAsync(user, new UserLoginInfo(externalIdentity.Provider, externalIdentity.ProviderSubject, externalIdentity.Provider)).ConfigureAwait(false);
-        if (!addLoginResult.Succeeded && addLoginResult.Errors.All(e => e.Code != "LoginAlreadyAssociated"))
-        {
-            throw new InvalidOperationException($"Unable to associate external login: {string.Join(", ", addLoginResult.Errors.Select(e => e.Description))}");
-        }
-
-        var targetRoles = _externalRoleMapper.MapRoles(externalIdentity);
-        var existingRoles = await _userManager.GetRolesAsync(user).ConfigureAwait(false);
-
+        var targetRoles = externalRoleMapper.MapRoles(externalIdentity);
+        var existingRoles = await userManager.GetRolesAsync(user).ConfigureAwait(false);
         foreach (var role in targetRoles.Except(existingRoles, StringComparer.OrdinalIgnoreCase))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var addToRoleResult = await _userManager.AddToRoleAsync(user, role).ConfigureAwait(false);
-            if (!addToRoleResult.Succeeded)
+            var result = await userManager.AddToRoleAsync(user, role).ConfigureAwait(false);
+            if (!result.Succeeded)
             {
-                throw new InvalidOperationException($"Unable to assign role '{role}' to user '{user.Id}': {string.Join(", ", addToRoleResult.Errors.Select(e => e.Description))}");
+                throw new InvalidOperationException("Unable to assign a configured internal role during external provisioning.");
             }
 
             provisioningOccurred = true;
         }
 
-        var provisionResult = new ProvisionResult
+        return Result<ProvisionResult>.Success(new ProvisionResult
         {
             InternalUserId = user.Id,
             InternalRoles = targetRoles,
             ProvisioningOccurred = provisioningOccurred
-        };
+        });
+    }
 
-        _logger.LogInformation(
-            "OIDC provisioning completed for provider {Provider} and subject {Subject}. Internal user {InternalUserId}. Provisioning occurred: {ProvisioningOccurred}",
-            externalIdentity.Provider,
-            externalIdentity.ProviderSubject,
-            user.Id,
-            provisioningOccurred);
+    private Result<ProvisionResult> Reject(string code)
+    {
+        logger.LogWarning("External provisioning rejected. Code {Code}", code);
+        return Result<ProvisionResult>.Failure(new Error(code, "External identity cannot be provisioned.", ErrorType.Forbidden));
+    }
 
-        return provisionResult;
+    private static string Hash(string value)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     }
 }

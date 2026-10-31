@@ -22,6 +22,11 @@ public sealed class LocalJwtTokenGenerator : ILocalJwtTokenGenerator
     public LocalTokenResult Generate(AuthUser user, IReadOnlyCollection<string> roles)
     {
         var localJwtOptions = _localJwtOptions;
+        if (!localJwtOptions.Enabled)
+        {
+            throw new InvalidOperationException("Local JWT token issuance is disabled.");
+        }
+
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var jwtId = Guid.NewGuid().ToString();
 

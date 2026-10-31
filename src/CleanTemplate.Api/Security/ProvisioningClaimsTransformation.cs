@@ -9,108 +9,114 @@ using Microsoft.Extensions.Options;
 
 namespace CleanTemplate.Api.Security;
 
-public sealed class ProvisioningClaimsTransformation : IClaimsTransformation
+public sealed class ProvisioningClaimsTransformation(
+    IOptions<AuthOptions> authOptions,
+    IExternalIdentityProvisioningService provisioningService,
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<ProvisioningClaimsTransformation> logger) : IClaimsTransformation
 {
-    private readonly AuthOptions _authOptions;
-    private readonly IExternalIdentityProvisioningService _provisioningService;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly ILogger<ProvisioningClaimsTransformation> _logger;
-
-    public ProvisioningClaimsTransformation(
-        IOptions<AuthOptions> authOptions,
-        IExternalIdentityProvisioningService provisioningService,
-        IHttpContextAccessor httpContextAccessor,
-        ILogger<ProvisioningClaimsTransformation> logger)
-    {
-        _authOptions = authOptions.Value;
-        _provisioningService = provisioningService;
-        _httpContextAccessor = httpContextAccessor;
-        _logger = logger;
-    }
+    private readonly AuthOptions _authOptions = authOptions.Value;
 
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
-        if (principal.Identity?.IsAuthenticated != true)
+        // ClaimsPrincipal may be transformed more than once. A JWT cannot materialize this CLR type.
+        if (principal.Identities.Any(identity => identity is InternalClaimsIdentity))
         {
             return principal;
         }
 
-        if (principal.HasClaim(c => c.Type == InternalClaimTypes.InternalUserId))
+        var source = principal.Identities.FirstOrDefault(identity => identity.IsAuthenticated
+            && identity.AuthenticationType is "LocalJwt" or "Oidc");
+        if (source is null)
         {
-            return principal;
+            return new ClaimsPrincipal(new ClaimsIdentity());
         }
 
-        if (!_authOptions.Provisioning.Enabled || !_authOptions.Schemes.Oidc.Enabled)
+        // Drop all identities/roles/identifiers that could impersonate internal authorization.
+        var reservedTypes = GetReservedTypes(source);
+        var sanitized = new ClaimsPrincipal(new ClaimsIdentity(
+            source.Claims.Where(claim => !reservedTypes.Contains(claim.Type)),
+            source.AuthenticationType,
+            source.NameClaimType,
+            InternalClaimTypes.Role));
+
+        if (source.AuthenticationType == "LocalJwt")
         {
-            return principal;
+            if (_authOptions.Schemes.LocalJwt.Enabled
+                && Guid.TryParse(GetSingleValue(source, "sub"), out var userId)
+                && userId != Guid.Empty)
+            {
+                sanitized.AddIdentity(new InternalClaimsIdentity(userId, "LocalJwt", GetValues(source, ClaimTypes.Role)));
+            }
+
+            return sanitized;
         }
 
-        var issuer = principal.FindFirstValue("iss");
-        if (string.IsNullOrWhiteSpace(issuer)
-            || string.Equals(issuer, _authOptions.Schemes.LocalJwt.Issuer, StringComparison.OrdinalIgnoreCase))
+        if (!_authOptions.Schemes.Oidc.Enabled || !_authOptions.Provisioning.Enabled)
         {
-            return principal;
+            return sanitized;
         }
 
         var claims = _authOptions.Schemes.Oidc.Claims;
-        var providerSubject = principal.FindFirstValue(claims.Subject);
-        if (string.IsNullOrWhiteSpace(providerSubject))
+        var issuer = GetSingleValue(source, "iss");
+        var subject = GetSingleValue(source, "sub");
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
         {
-            _logger.LogWarning("OIDC token did not include subject claim '{SubjectClaim}'", claims.Subject);
-            return principal;
+            logger.LogWarning("External provisioning rejected: a unique issuer and subject are required");
+            return sanitized;
         }
 
         var externalIdentity = new ExternalIdentity
         {
             Provider = _authOptions.Schemes.Oidc.Provider,
-            ProviderSubject = providerSubject,
-            Email = principal.FindFirstValue(claims.Email),
-            Name = principal.FindFirstValue(claims.Name),
-            TenantId = principal.FindFirstValue(claims.TenantId),
             Issuer = issuer,
-            Groups = GetMultiValueClaims(principal, claims.Groups),
-            Roles = GetMultiValueClaims(principal, claims.Roles)
+            ProviderSubject = subject,
+            Email = GetSingleValue(source, claims.Email),
+            EmailVerified = bool.TryParse(GetSingleValue(source, claims.EmailVerified), out var verified) && verified,
+            Name = GetSingleValue(source, claims.Name),
+            TenantId = GetSingleValue(source, claims.TenantId),
+            Groups = GetValues(source, claims.Groups),
+            Roles = GetValues(source, claims.Roles)
         };
 
-        var cancellationToken = _httpContextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None;
-        var provisionResult = await _provisioningService.ProvisionAsync(externalIdentity, cancellationToken);
-
-        var internalIdentity = new ClaimsIdentity();
-        internalIdentity.AddClaim(new Claim(InternalClaimTypes.InternalUserId, provisionResult.InternalUserId.ToString()));
-        internalIdentity.AddClaim(new Claim(ClaimTypes.NameIdentifier, provisionResult.InternalUserId.ToString()));
-        internalIdentity.AddClaim(new Claim(InternalClaimTypes.AuthProvider, externalIdentity.Provider));
-
-        foreach (var role in provisionResult.InternalRoles)
+        var cancellationToken = httpContextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None;
+        var result = await provisioningService.ProvisionAsync(externalIdentity, cancellationToken).ConfigureAwait(false);
+        if (result.IsFailure || result.Value.InternalUserId == Guid.Empty)
         {
-            if (!principal.HasClaim(ClaimTypes.Role, role))
-            {
-                internalIdentity.AddClaim(new Claim(ClaimTypes.Role, role));
-            }
+            logger.LogWarning("External provisioning rejected. Code {Code}", result.FirstError?.Code ?? "Auth.InvalidInternalIdentity");
+            return sanitized;
         }
 
-        principal.AddIdentity(internalIdentity);
-
-        _logger.LogInformation(
-            "OIDC principal transformed. Provider {Provider}, internal user {InternalUserId}, provisioning occurred: {ProvisioningOccurred}",
+        sanitized.AddIdentity(new InternalClaimsIdentity(
+            result.Value.InternalUserId,
             externalIdentity.Provider,
-            provisionResult.InternalUserId,
-            provisionResult.ProvisioningOccurred);
+            result.Value.InternalRoles));
 
-        return principal;
+        return sanitized;
     }
 
-    private static IReadOnlyCollection<string> GetMultiValueClaims(ClaimsPrincipal principal, string claimType)
+    private HashSet<string> GetReservedTypes(ClaimsIdentity source)
     {
-        if (string.IsNullOrWhiteSpace(claimType))
+        return new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            return [];
-        }
+            InternalClaimTypes.InternalUserId, InternalClaimTypes.AuthProvider, InternalClaimTypes.Role,
+            ClaimTypes.NameIdentifier, ClaimTypes.Role, source.RoleClaimType,
+            _authOptions.Schemes.Oidc.Claims.Roles, "role", "roles"
+        };
+    }
 
-        return principal.Claims
-            .Where(c => c.Type == claimType)
-            .Select(c => c.Value)
+    private static string? GetSingleValue(ClaimsIdentity identity, string claimType)
+    {
+        var values = identity.Claims.Where(claim => claim.Type == claimType).Take(2).ToArray();
+        return values.Length == 1 ? values[0].Value : null;
+    }
+
+    private static IReadOnlyCollection<string> GetValues(ClaimsIdentity identity, string claimType)
+    {
+        return identity.Claims.Where(claim => claim.Type == claimType)
+            .Select(claim => claim.Value)
             .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
     }
 }

@@ -6,6 +6,28 @@ namespace CleanTemplate.Infrastructure.Tests.Security;
 
 public sealed class ExternalRoleMapperTests
 {
+    [Theory]
+    [InlineData(false, "User")]
+    [InlineData(true, "Admin")]
+    public void MapRoles_EmailRulesRequireExplicitVerification(bool verified, string expectedRole)
+    {
+        var mapper = BuildMapper(new ExternalRoleMappingOptions
+        {
+            Admin = new ExternalRoleMappingRuleOptions { Emails = ["admin@example.test"], Domains = ["example.test"] }
+        });
+
+        var roles = mapper.MapRoles(new ExternalIdentity
+        {
+            Provider = "Oidc",
+            Issuer = "https://identity.test",
+            ProviderSubject = "subject",
+            Email = "admin@example.test",
+            EmailVerified = verified
+        });
+
+        Assert.Equal([expectedRole], roles);
+    }
+
     [Fact]
     public void MapRoles_WhenAdminEmailMatches_ReturnsAdmin()
     {
@@ -21,7 +43,9 @@ public sealed class ExternalRoleMapperTests
         var identity = new ExternalIdentity
         {
             Provider = "Oidc",
+            Issuer = "https://identity.test",
             ProviderSubject = "sub-1",
+            EmailVerified = true,
             Email = "admin@contoso.com"
         };
 
@@ -41,6 +65,7 @@ public sealed class ExternalRoleMapperTests
         var identity = new ExternalIdentity
         {
             Provider = "Oidc",
+            Issuer = "https://identity.test",
             ProviderSubject = "sub-2",
             Email = "john@unknown.com"
         };

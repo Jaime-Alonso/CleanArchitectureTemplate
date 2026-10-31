@@ -6,6 +6,7 @@ using CleanTemplate.Api.IntegrationTests.Infrastructure;
 
 namespace CleanTemplate.Api.IntegrationTests.Endpoints;
 
+[Collection(HostIntegrationCollection.Name)]
 public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplicationFactory>
 {
     private const string SeedAdminPassword = "ChangeMe_UseUserSecrets!123";

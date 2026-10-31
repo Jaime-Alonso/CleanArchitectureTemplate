@@ -15,7 +15,7 @@ public sealed class ExternalRoleMapper : IExternalRoleMapper
 
     public IReadOnlyCollection<string> MapRoles(ExternalIdentity externalIdentity)
     {
-        var normalizedEmail = externalIdentity.Email?.Trim().ToLowerInvariant();
+        var normalizedEmail = externalIdentity.EmailVerified ? externalIdentity.Email?.Trim().ToLowerInvariant() : null;
         var domain = normalizedEmail?.Split('@').LastOrDefault();
 
         if (MatchesExactEmail(_roleMappingOptions.Admin.Emails, normalizedEmail)

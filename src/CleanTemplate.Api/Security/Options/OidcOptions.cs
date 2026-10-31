@@ -6,5 +6,6 @@ public sealed class OidcOptions
     public string Authority { get; init; } = string.Empty;
     public string Audience { get; init; } = string.Empty;
     public string Provider { get; init; } = "Oidc";
+    public IReadOnlyCollection<string> AllowedTenantIds { get; init; } = [];
     public OidcClaimsOptions Claims { get; init; } = new();
 }

@@ -6,6 +6,11 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
 {
     public ValidateOptionsResult Validate(string? name, AuthOptions options)
     {
+        if (!options.Schemes.LocalJwt.Enabled && !options.Schemes.Oidc.Enabled)
+        {
+            return ValidateOptionsResult.Fail("At least one authentication scheme (LocalJwt or Oidc) must be enabled.");
+        }
+
         if (options.Schemes.LocalJwt.Enabled)
         {
             if (string.IsNullOrWhiteSpace(options.Schemes.LocalJwt.Issuer))
@@ -45,6 +50,11 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
             {
                 return ValidateOptionsResult.Fail("Auth:Schemes:LocalJwt:RefreshTokenDays must be between 1 and 90.");
             }
+
+            if (options.Schemes.LocalJwt.AccessTokenMinutes <= 0)
+            {
+                return ValidateOptionsResult.Fail("Auth:Schemes:LocalJwt:AccessTokenMinutes must be greater than zero.");
+            }
         }
 
         if (options.Schemes.Oidc.Enabled)
@@ -58,11 +68,35 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
             {
                 return ValidateOptionsResult.Fail("Auth:Schemes:Oidc:Audience is required when OIDC is enabled.");
             }
+
+            if (!Uri.TryCreate(options.Schemes.Oidc.Authority, UriKind.Absolute, out var authority)
+                || authority.Scheme != Uri.UriSchemeHttps)
+            {
+                return ValidateOptionsResult.Fail("Auth:Schemes:Oidc:Authority must be an absolute HTTPS URL.");
+            }
         }
 
         if (options.Provisioning.Enabled && !options.Schemes.Oidc.Enabled)
         {
             return ValidateOptionsResult.Fail("Auth:Provisioning:Enabled requires Auth:Schemes:Oidc:Enabled=true.");
+        }
+
+        if (options.Schemes.Oidc.AllowedTenantIds.Any(string.IsNullOrWhiteSpace))
+        {
+            return ValidateOptionsResult.Fail("Auth:Schemes:Oidc:AllowedTenantIds cannot contain empty entries.");
+        }
+
+        if (options.Schemes.Oidc.AllowedTenantIds.Count > 0 && string.IsNullOrWhiteSpace(options.Schemes.Oidc.Claims.TenantId))
+        {
+            return ValidateOptionsResult.Fail("Auth:Schemes:Oidc:Claims:TenantId is required when tenants are restricted.");
+        }
+
+        if (options.Provisioning.Enabled
+            && (options.Schemes.Oidc.Claims.Subject != "sub"
+                || string.IsNullOrWhiteSpace(options.Schemes.Oidc.Claims.Email)
+                || string.IsNullOrWhiteSpace(options.Schemes.Oidc.Claims.EmailVerified)))
+        {
+            return ValidateOptionsResult.Fail("External provisioning requires the standard sub claim and configured Email/EmailVerified claim names.");
         }
 
         return ValidateOptionsResult.Success;
