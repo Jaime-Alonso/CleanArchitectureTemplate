@@ -1,11 +1,12 @@
-using Mediora;
 using CleanTemplate.SharedKernel.Results;
+using Mediora;
 
 namespace CleanTemplate.Application.Products.Commands.UpdateProduct;
 
 public sealed record UpdateProductCommand : IRequest<Result>
 {
     public Guid Id { get; init; }
+    public long ExpectedVersion { get; init; }
     public required string Name { get; init; }
     public string? Description { get; init; }
     public decimal Price { get; init; }

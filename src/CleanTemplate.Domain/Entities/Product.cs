@@ -1,5 +1,5 @@
-using CleanTemplate.SharedKernel.Entities;
 using CleanTemplate.Domain.Exceptions;
+using CleanTemplate.SharedKernel.Entities;
 
 namespace CleanTemplate.Domain.Entities;
 
@@ -11,6 +11,7 @@ public sealed class Product : Entity
     public string? Description { get; private set; }
     public decimal Price { get; private set; }
     public int Stock { get; private set; }
+    public long Version { get; private set; } = 1;
 
     private Product() { }
 
@@ -36,6 +37,7 @@ public sealed class Product : Entity
         Description = description;
         Price = price;
         Stock = stock;
+        Version = checked(Version + 1);
     }
 
     private static void ValidateName(string name)

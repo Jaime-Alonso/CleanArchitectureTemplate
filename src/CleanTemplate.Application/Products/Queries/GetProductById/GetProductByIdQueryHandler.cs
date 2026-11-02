@@ -23,7 +23,8 @@ public sealed class GetProductByIdQueryHandler(IProductReadRepository productRea
                 Name = product.Name,
                 Description = product.Description,
                 Price = product.Price,
-                Stock = product.Stock
+                Stock = product.Stock,
+                Version = product.Version
             })
             : Result<ProductDto>.Failure(Error.NotFound("Products.NotFound", $"Product '{request.Id}' was not found."));
     }

@@ -24,8 +24,12 @@ public sealed class DeleteProductCommandHandler(IProductWriteRepository productW
             return Result.Failure(Error.NotFound("Products.NotFound", $"Product '{request.Id}' was not found."));
         }
 
+        if (product.Version != request.ExpectedVersion)
+            return Result.Failure(new Error("Products.VersionConflict", "The product version is stale.", ErrorType.Conflict));
+
         _productWriteRepository.Remove(product);
-        await _productWriteRepository.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (!await _productWriteRepository.TrySaveChangesAsync(cancellationToken).ConfigureAwait(false))
+            return Result.Failure(new Error("Products.VersionConflict", "The product version is stale.", ErrorType.Conflict));
 
         _logger.LogInformation("Product deleted successfully. ProductId {ProductId}", request.Id);
 

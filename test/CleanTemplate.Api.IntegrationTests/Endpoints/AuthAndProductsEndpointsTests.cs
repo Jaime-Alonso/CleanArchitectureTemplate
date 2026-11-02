@@ -204,16 +204,49 @@ public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplica
             Name = "Integration Product Updated",
             Description = "Updated",
             Price = 12m,
-            Stock = 4
+            Stock = 4,
+            ExpectedVersion = 1
         });
 
         Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
 
-        var deleteResponse = await client.DeleteAsync($"/api/products/{createdPayload.Id}");
+        var deleteResponse = await client.DeleteAsync($"/api/products/{createdPayload.Id}?expectedVersion=2");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
-        var deleteMissingResponse = await client.DeleteAsync($"/api/products/{createdPayload.Id}");
+        var deleteMissingResponse = await client.DeleteAsync($"/api/products/{createdPayload.Id}?expectedVersion=2");
         Assert.Equal(HttpStatusCode.NotFound, deleteMissingResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Products_StaleClientsCannotUpdateOrDeleteNewerVersion()
+    {
+        using var first = CreateClient("198.51.100.21");
+        using var second = CreateClient("198.51.100.22");
+        var login = await LoginAsync(first);
+        first.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+        second.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+        using var create = await first.PostAsJsonAsync("/api/products/", new { Name = "concurrent", Price = 1m, Stock = 1 });
+        var created = (await create.Content.ReadFromJsonAsync<CreatedProductResponse>())!;
+        var url = $"/api/products/{created.Id}";
+        using var missingVersion = await first.PutAsJsonAsync(url, new { Name = "invalid", Price = 1m, Stock = 1 });
+        Assert.Equal(HttpStatusCode.BadRequest, missingVersion.StatusCode);
+        using var invalidDelete = await first.DeleteAsync($"{url}?expectedVersion=0");
+        Assert.Equal(HttpStatusCode.BadRequest, invalidDelete.StatusCode);
+        using var read1 = await first.GetAsync(url);
+        using var read2 = await second.GetAsync(url);
+        var version1 = (await read1.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("version").GetInt64();
+        var version2 = (await read2.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("version").GetInt64();
+        Assert.Equal(version1, version2);
+        using var winner = await first.PutAsJsonAsync(url, new { Name = "winner", Price = 2m, Stock = 2, ExpectedVersion = version1 });
+        using var loser = await second.PutAsJsonAsync(url, new { Name = "loser", Price = 3m, Stock = 3, ExpectedVersion = version2 });
+        Assert.Equal(HttpStatusCode.NoContent, winner.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, loser.StatusCode);
+        using var staleDelete = await second.DeleteAsync($"{url}?expectedVersion={version2}");
+        Assert.Equal(HttpStatusCode.Conflict, staleDelete.StatusCode);
+        using var read = await first.GetAsync(url);
+        var product = await read.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("winner", product.GetProperty("name").GetString());
+        Assert.Equal(version1 + 1, product.GetProperty("version").GetInt64());
     }
 
     [Fact]

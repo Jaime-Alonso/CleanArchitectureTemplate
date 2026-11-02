@@ -8,4 +8,5 @@ public interface IProductWriteRepository
     void Add(Product product);
     void Remove(Product product);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+    Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken = default);
 }

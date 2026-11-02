@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;
+using CleanTemplate.Infrastructure.Repositories.Writes;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -12,6 +13,42 @@ namespace CleanTemplate.Infrastructure.Tests.Database;
 
 public sealed class VersionedMigrationsAcceptanceTests
 {
+    [AcceptanceFact]
+    public async Task ProductVersionUpgradePreservesExistingProductAndRejectsStaleWrites()
+    {
+        await using var owned = await Database.CreateAsync();
+        var db = owned.Context;
+        var migrator = db.GetService<IMigrator>();
+        var previous = db.Database.GetMigrations().Reverse().Skip(1).First();
+        await owned.ExecuteScriptAsync(migrator.GenerateScript(toMigration: previous));
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Products\" (\"Id\", \"Name\", \"Price\", \"Stock\") VALUES ({id}, {"legacy"}, {12m}, {4})");
+        await owned.ExecuteScriptAsync(migrator.GenerateScript(fromMigration: previous, options: MigrationsSqlGenerationOptions.Idempotent));
+        await using var other = owned.CreateContext();
+        var first = new ProductWriteRepository(db);
+        var second = new ProductWriteRepository(other);
+        var a = (await first.GetByIdAsync(id))!;
+        var b = (await second.GetByIdAsync(id))!;
+        Assert.Equal(1, a.Version);
+        Assert.Equal("legacy", a.Name);
+        a.Update("winner", null, 13m, 5);
+        b.Update("loser", null, 14m, 6);
+        Assert.True(await first.TrySaveChangesAsync());
+        Assert.False(await second.TrySaveChangesAsync());
+        other.ChangeTracker.Clear();
+        var saved = (await second.GetByIdAsync(id))!;
+        Assert.Equal("winner", saved.Name);
+        Assert.Equal(2, saved.Version);
+        db.ChangeTracker.Clear();
+        var stale = (await first.GetByIdAsync(id))!;
+        saved.Update("newer", null, 15m, 7);
+        Assert.True(await second.TrySaveChangesAsync());
+        first.Remove(stale);
+        Assert.False(await first.TrySaveChangesAsync());
+        db.ChangeTracker.Clear();
+        Assert.Equal("newer", (await first.GetByIdAsync(id))!.Name);
+    }
+
     [AcceptanceFact]
     public async Task ScriptCreatesAndReappliesWithoutChangingData()
     {
@@ -121,6 +158,16 @@ public sealed class VersionedMigrationsAcceptanceTests
     private sealed class Database(ApplicationDbContext context, bool sqlServer) : IAsyncDisposable
     {
         public ApplicationDbContext Context => context;
+
+        public ApplicationDbContext CreateContext()
+        {
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>();
+            if (sqlServer)
+                options.UseSqlServer(context.Database.GetConnectionString(), x => x.MigrationsAssembly("CleanTemplate.Migrations.SqlServer"));
+            else
+                options.UseNpgsql(context.Database.GetConnectionString(), x => x.MigrationsAssembly("CleanTemplate.Migrations.PostgreSql"));
+            return new ApplicationDbContext(options.Options);
+        }
 
         public static async Task<Database> CreateAsync(bool createEmpty = true)
         {

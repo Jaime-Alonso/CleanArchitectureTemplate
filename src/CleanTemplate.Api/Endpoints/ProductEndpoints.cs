@@ -1,10 +1,10 @@
+using CleanTemplate.Api.Endpoints.Contracts.Products;
+using CleanTemplate.Api.Extensions;
 using CleanTemplate.Application.Common.Criteria;
 using CleanTemplate.Application.Products.ReadModels;
 using Mediora;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using CleanTemplate.Api.Endpoints.Contracts.Products;
-using CleanTemplate.Api.Extensions;
 
 namespace CleanTemplate.Api.Endpoints;
 
@@ -65,9 +65,13 @@ public static class ProductEndpoints
         ISender sender,
         CancellationToken cancellationToken)
     {
+        if (request.ExpectedVersion <= 0)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["expectedVersion"] = ["A positive expected version is required."] });
+
         var command = new Application.Products.Commands.UpdateProduct.UpdateProductCommand
         {
             Id = id,
+            ExpectedVersion = request.ExpectedVersion,
             Name = request.Name,
             Description = request.Description,
             Price = request.Price,
@@ -81,12 +85,17 @@ public static class ProductEndpoints
 
     private static async Task<IResult> DeleteProduct(
         Guid id,
+        long expectedVersion,
         ISender sender,
         CancellationToken cancellationToken)
     {
+        if (expectedVersion <= 0)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["expectedVersion"] = ["A positive expected version is required."] });
+
         var command = new Application.Products.Commands.DeleteProduct.DeleteProductCommand
         {
-            Id = id
+            Id = id,
+            ExpectedVersion = expectedVersion
         };
 
         var result = await sender.Send(command, cancellationToken);

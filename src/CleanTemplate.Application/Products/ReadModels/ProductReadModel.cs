@@ -7,4 +7,5 @@ public sealed record ProductReadModel
     public string? Description { get; init; }
     public decimal Price { get; init; }
     public int Stock { get; init; }
+    public long Version { get; init; }
 }

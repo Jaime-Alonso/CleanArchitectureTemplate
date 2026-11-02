@@ -1,5 +1,5 @@
-using FluentValidation;
 using CleanTemplate.Domain.Entities;
+using FluentValidation;
 
 namespace CleanTemplate.Application.Products.Commands.UpdateProduct;
 
@@ -7,6 +7,7 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
 {
     public UpdateProductCommandValidator()
     {
+        RuleFor(x => x.ExpectedVersion).GreaterThan(0);
         RuleFor(x => x.Id)
             .NotEmpty().WithMessage("Id is required");
 

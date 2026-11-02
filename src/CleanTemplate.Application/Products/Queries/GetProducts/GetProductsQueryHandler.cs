@@ -1,5 +1,5 @@
-using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Common.Pagination;
+using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Products.ReadModels;
 using Mediora;
 
@@ -34,7 +34,8 @@ public sealed class GetProductsQueryHandler(IProductReadRepository productReadRe
                 Id = product.Id,
                 Name = product.Name,
                 Price = product.Price,
-                Stock = product.Stock
+                Stock = product.Stock,
+                Version = product.Version
             })];
 
         return PagedResult<ProductListItemDto>.Create(

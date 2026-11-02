@@ -44,6 +44,12 @@ namespace CleanTemplate.Migrations.SqlServer.Migrations
                     b.Property<int>("Stock")
                         .HasColumnType("int");
 
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
                     b.HasKey("Id");
 
                     b.ToTable("Products", (string)null);

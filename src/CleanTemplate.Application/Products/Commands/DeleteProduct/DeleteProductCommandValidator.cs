@@ -6,6 +6,7 @@ public sealed class DeleteProductCommandValidator : AbstractValidator<DeleteProd
 {
     public DeleteProductCommandValidator()
     {
+        RuleFor(x => x.ExpectedVersion).GreaterThan(0);
         RuleFor(x => x.Id)
             .NotEmpty().WithMessage("Id is required");
     }

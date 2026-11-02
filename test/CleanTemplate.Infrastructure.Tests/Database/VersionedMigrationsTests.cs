@@ -1,5 +1,7 @@
+using CleanTemplate.Domain.Entities;
 using CleanTemplate.Infrastructure.Extensions;
 using CleanTemplate.Infrastructure.Persistence;
+using CleanTemplate.Infrastructure.Repositories.Writes;
 using CleanTemplate.Migrations.PostgreSql;
 using CleanTemplate.Migrations.SqlServer;
 using Microsoft.Data.Sqlite;
@@ -11,6 +13,41 @@ namespace CleanTemplate.Infrastructure.Tests.Database;
 
 public sealed class VersionedMigrationsTests
 {
+    [Fact]
+    public async Task SqliteIndependentContextsRejectStaleUpdateAndDelete()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlite(connection).Options;
+        await using var firstContext = new ApplicationDbContext(options);
+        await using var secondContext = new ApplicationDbContext(options);
+        await firstContext.Database.EnsureCreatedAsync();
+        var product = new Product("original", null, 1m, 1);
+        firstContext.Add(product);
+        await firstContext.SaveChangesAsync();
+        firstContext.ChangeTracker.Clear();
+        var first = new ProductWriteRepository(firstContext);
+        var second = new ProductWriteRepository(secondContext);
+        var a = (await first.GetByIdAsync(product.Id))!;
+        var b = (await second.GetByIdAsync(product.Id))!;
+        a.Update("winner", null, 2m, 2);
+        b.Update("loser", null, 3m, 3);
+        Assert.True(await first.TrySaveChangesAsync());
+        Assert.False(await second.TrySaveChangesAsync());
+        secondContext.ChangeTracker.Clear();
+        var current = (await second.GetByIdAsync(product.Id))!;
+        Assert.Equal("winner", current.Name);
+        Assert.Equal(2, current.Version);
+        firstContext.ChangeTracker.Clear();
+        var stale = (await first.GetByIdAsync(product.Id))!;
+        current.Update("newer", null, 4m, 4);
+        Assert.True(await second.TrySaveChangesAsync());
+        first.Remove(stale);
+        Assert.False(await first.TrySaveChangesAsync());
+        firstContext.ChangeTracker.Clear();
+        Assert.Equal("newer", (await first.GetByIdAsync(product.Id))!.Name);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

@@ -219,6 +219,8 @@ It defines contracts that Infrastructure implements.
 
 Validation approach in this template is intentional: FluentValidation handles request-level input filtering, while Domain entities still enforce invariants. For products, name length is centralized in `Product.NameMaxLength` and reused by validators and EF configuration to keep rules consistent across layers.
 
+Product reads expose `version`; updates and deletes require `expectedVersion` and reject stale writes with HTTP 409. See the [product concurrency contract and upgrade requirements](docs/product-concurrency.md) before updating clients or deploying writers.
+
 Time-dependent behavior (for example token issuance/expiration) uses `TimeProvider` via DI instead of calling `DateTime.UtcNow` directly, improving testability.
 
 The host exposes `GET /health` and includes an EF Core `DbContext` health check for basic runtime monitoring.

@@ -25,5 +25,9 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.Property(p => p.Stock)
             .IsRequired();
+
+        builder.Property(p => p.Version)
+            .IsConcurrencyToken()
+            .HasDefaultValue(1L);
     }
 }

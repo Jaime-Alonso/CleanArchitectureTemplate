@@ -26,7 +26,7 @@ public sealed class ProductReadRepository : IProductReadRepository
     public async Task<ProductReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         const string sql = """
-            SELECT "Id", "Name", "Description", "Price", "Stock"
+            SELECT "Id", "Name", "Description", "Price", "Stock", "Version"
             FROM "Products"
             WHERE "Id" = @Id
             """;
@@ -52,7 +52,8 @@ public sealed class ProductReadRepository : IProductReadRepository
             Name = row.Name,
             Description = row.Description,
             Price = row.Price,
-            Stock = row.Stock
+            Stock = row.Stock,
+            Version = row.Version
         };
     }
 
@@ -71,7 +72,7 @@ public sealed class ProductReadRepository : IProductReadRepository
 
         var sql = _sqlDialect.Paginate(
             """
-            SELECT "Id", "Name", "Price", "Stock"
+            SELECT "Id", "Name", "Price", "Stock", "Version"
             FROM "Products"
             """,
             sortField,
@@ -100,7 +101,8 @@ public sealed class ProductReadRepository : IProductReadRepository
                 Id = row.Id,
                 Name = row.Name,
                 Price = row.Price,
-                Stock = row.Stock
+                Stock = row.Stock,
+                Version = row.Version
             })
             .ToList();
 
@@ -118,6 +120,7 @@ public sealed class ProductReadRepository : IProductReadRepository
         public string? Description { get; init; }
         public decimal Price { get; init; }
         public int Stock { get; init; }
+        public long Version { get; init; }
     }
 
     private sealed record ProductListItemRow
@@ -126,6 +129,7 @@ public sealed class ProductReadRepository : IProductReadRepository
         public string Name { get; init; } = string.Empty;
         public decimal Price { get; init; }
         public int Stock { get; init; }
+        public long Version { get; init; }
     }
 
     private sealed class GuidTypeHandler : SqlMapper.TypeHandler<Guid>

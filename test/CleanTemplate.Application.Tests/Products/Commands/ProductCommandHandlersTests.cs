@@ -65,7 +65,7 @@ public sealed class ProductCommandHandlersTests
         await repository.SaveChangesAsync();
 
         var handler = new DeleteProductCommandHandler(repository, NullLogger<DeleteProductCommandHandler>.Instance);
-        var command = new DeleteProductCommand { Id = product.Id };
+        var command = new DeleteProductCommand { Id = product.Id, ExpectedVersion = product.Version };
 
         var result = await handler.Handle(command, CancellationToken.None);
 
@@ -97,5 +97,7 @@ public sealed class ProductCommandHandlersTests
         {
             return Task.FromResult(1);
         }
+
+        public Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
     }
 }
