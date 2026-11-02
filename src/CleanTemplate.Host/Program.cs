@@ -58,7 +58,7 @@ try
     builder.Services.AddForwardedHeadersSupport(builder.Configuration);
     builder.Services.AddApiRateLimiting(builder.Configuration);
     builder.Services.AddOpenTelemetryObservability(builder.Configuration, builder.Environment);
-    builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>();
+    builder.Services.AddOperationalHealthChecks(builder.Configuration);
 
     builder.Services.ValidateRequestValidationConfiguration();
     var app = builder.Build();
@@ -92,7 +92,7 @@ try
     app.MapAuthEndpoints();
 
     app.MapProductEndpoints();
-    app.MapHealthChecks("/health");
+    app.MapOperationalHealthChecks();
 
     app.Run();
 }

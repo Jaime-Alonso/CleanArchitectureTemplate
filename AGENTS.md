@@ -258,6 +258,7 @@ public async Task<Result<User>> GetUserAsync(
 ### Api / Host
 
 - Minimal API endpoints
+- Liveness must not depend on external services. Readiness timeouts are cooperative: propagate cancellation and provider timeouts; never use `WaitAsync` to abandon checks holding scoped resources or promise a hard deadline for uncooperative providers.
 - Dependency injection configuration
 - Middleware and authentication
 - Maps HTTP to Application layer

@@ -268,7 +268,11 @@ Product names and descriptions use shared UTF-16 limits; prices reject values ou
 
 Time-dependent behavior (for example token issuance/expiration) uses `TimeProvider` via DI instead of calling `DateTime.UtcNow` directly, improving testability.
 
-The host exposes `GET /health` and includes an EF Core `DbContext` health check for basic runtime monitoring.
+The host exposes `GET /health/live` (process liveness, no dependency checks), `GET /health/ready` (readiness) and `GET /health` (a compatibility alias for readiness). Readiness executes `SELECT 1` against the primary database and, when `ProductReads:Mode=Replica`, the configured read replica; when `Caching:Provider=Redis`, it reads a constant probe key through `IDistributedCache` without writing. A missing key is healthy. This tests connectivity, not schema correctness, replication lag, write permissions or full application functionality. HTTP 200 contains only `Healthy`; failures and degraded results return 503 and `Unhealthy`. Responses disable caching. These technical routes are anonymous, version-neutral, excluded from OpenAPI and exempt from application rate limiting.
+
+**Exposure and HTTPS:** anonymous status still reveals availability. Restrict all three paths to trusted monitoring sources using ingress/network policy; they are not a public diagnostics API. The host's normal HTTPS redirection applies: configure HTTPS probes, or terminate TLS at a trusted ingress and configure forwarded headers correctly. An intentionally isolated plaintext probe network requires an explicit deployment-level TLS/redirect decision; do not assume these routes bypass HTTPS redirection. Protect operational logs separately because provider errors can be logged even though responses contain no details.
+
+`HealthChecks:TimeoutSeconds` is an integer from 1 to 60, default 5, applied per readiness check and as the database command timeout. Cancellation is cooperative, not a hard response deadline: connection opening, database commands and Redis receive the cancellation token, but providers or an already-dispatched Redis operation may finish later. The check awaits the underlying operation before disposing its resources; it does not abandon it with `WaitAsync`. Configure appropriate connection and command timeouts for SQL Server/PostgreSQL and connection/async timeouts in the Redis connection string as additional bounds; verify them in the deployed network. Probe and ingress deadlines must allow for those provider limits.
 
 ---
 

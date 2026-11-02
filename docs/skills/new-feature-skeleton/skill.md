@@ -5,6 +5,8 @@ For every endpoint, describe actual HTTP success/error responses, security, requ
 Canonical OpenCode file: `.opencode/skills/new-feature-skeleton/SKILL.md`
 
 ## Purpose
+Liveness must not depend on external services. Readiness timeouts are cooperative: propagate cancellation and provider timeouts; never use `WaitAsync` to abandon checks holding scoped resources or promise a hard deadline for uncooperative providers.
+
 Create a new feature use case with consistent structure across Application, Api, and tests.
 
 This skill is intentionally opinionated: it prioritizes practical consistency over strict architecture purism.
