@@ -7,9 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Products.Commands.DeleteProduct;
 
-public sealed class DeleteProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<DeleteProductCommandHandler> logger) : IRequestHandler<DeleteProductCommand, Result>
+public sealed class DeleteProductCommandHandler(IProductWriteRepository productWriteRepository, IUnitOfWork unitOfWork, ILogger<DeleteProductCommandHandler> logger) : IRequestHandler<DeleteProductCommand, Result>
 {
     private readonly IProductWriteRepository _productWriteRepository = productWriteRepository;
+    private readonly IUnitOfWork _unitOfWork = unitOfWork;
     private readonly ILogger<DeleteProductCommandHandler> _logger = logger;
 
     public async Task<Result> Handle(DeleteProductCommand request, CancellationToken cancellationToken)
@@ -28,7 +29,7 @@ public sealed class DeleteProductCommandHandler(IProductWriteRepository productW
             return Result.Failure(new Error("Products.VersionConflict", "The product version is stale.", ErrorType.Conflict));
 
         _productWriteRepository.Remove(product);
-        if (!await _productWriteRepository.TrySaveChangesAsync(cancellationToken).ConfigureAwait(false))
+        if (!await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false))
             return Result.Failure(new Error("Products.VersionConflict", "The product version is stale.", ErrorType.Conflict));
 
         _logger.LogInformation("Product deleted successfully. ProductId {ProductId}", request.Id);

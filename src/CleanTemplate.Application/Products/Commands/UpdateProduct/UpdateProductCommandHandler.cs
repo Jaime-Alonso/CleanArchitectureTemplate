@@ -7,9 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Products.Commands.UpdateProduct;
 
-public sealed class UpdateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<UpdateProductCommandHandler> logger) : IRequestHandler<UpdateProductCommand, Result>
+public sealed class UpdateProductCommandHandler(IProductWriteRepository productWriteRepository, IUnitOfWork unitOfWork, ILogger<UpdateProductCommandHandler> logger) : IRequestHandler<UpdateProductCommand, Result>
 {
     private readonly IProductWriteRepository _productWriteRepository = productWriteRepository;
+    private readonly IUnitOfWork _unitOfWork = unitOfWork;
     private readonly ILogger<UpdateProductCommandHandler> _logger = logger;
 
     public async Task<Result> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
@@ -29,7 +30,7 @@ public sealed class UpdateProductCommandHandler(IProductWriteRepository productW
 
         product.Update(request.Name, request.Description, request.Price, request.Stock);
 
-        if (!await _productWriteRepository.TrySaveChangesAsync(cancellationToken).ConfigureAwait(false))
+        if (!await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false))
             return Result.Failure(new Error("Products.VersionConflict", "The product version is stale.", ErrorType.Conflict));
 
         _logger.LogInformation("Product updated successfully. ProductId {ProductId}", request.Id);

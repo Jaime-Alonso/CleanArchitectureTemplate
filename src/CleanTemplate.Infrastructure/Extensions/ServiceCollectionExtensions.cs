@@ -177,6 +177,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IProductReadRepository, ProductReadRepository>();
         services.AddScoped<IProductWriteRepository, ProductWriteRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IExternalRoleMapper, ExternalRoleMapper>();
         services.AddExternalIdentityProvisioning();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();

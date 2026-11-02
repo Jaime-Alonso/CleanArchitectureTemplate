@@ -29,21 +29,4 @@ public sealed class ProductWriteRepository : IProductWriteRepository
         _dbContext.Remove(product);
     }
 
-    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        return _dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return false;
-        }
-    }
 }

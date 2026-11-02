@@ -14,7 +14,7 @@ Only a successful commit returns a successful ProvisionResult. Expected rejectio
 
 The outer ExternalIdentityProvisioningService creates a **fresh DI scope for each attempt**. Its UserManager, ApplicationDbContext and authorization reader must use the same EF-backed store/context within that scope. No tracked entities from a failed attempt are reused. The service neither saves nor clears the caller's pending changes, and refuses an ambient System.Transactions transaction instead of promising cross-unit atomicity.
 
-This is a provisioning-specific unit, not the generic application unit-of-work extraction pending in T-13. Register it through AddInfrastructure, or use AddExternalIdentityProvisioning alongside the required Identity/persistence/authorization adapters in isolated tests.
+This is a provisioning-specific unit, independent of the application unit of work. Register it through AddInfrastructure, or use AddExternalIdentityProvisioning alongside the required Identity/persistence/authorization adapters in isolated tests.
 
 ## Concurrency and uniqueness
 

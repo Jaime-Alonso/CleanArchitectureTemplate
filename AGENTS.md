@@ -93,7 +93,7 @@ Crosscutting contains outer-layer hosting utilities, not pure core primitives. P
 - Application uses specific write repositories and read-query contracts, never DbContext, IQueryable, EF Core or Dapper.
 - Infrastructure implements EF Core writes and Dapper reads; Dapper remains in the current base profile.
 - Do not recreate the removed generic context contract or Application DbContext extension methods.
-- Unit-of-work extraction (T-13) and read consistency (T-14) remain pending; do not claim cross-repository atomicity.
+- Application owns commits through the scoped `IUnitOfWork`, shared with write repositories. Multiple flushes require `ExecuteInTransactionAsync` and a `Result` callback: failure rolls back and invalidates the scope. Flush explicitly with `SaveChangesAsync`; transaction success does not flush pending changes, which remain tracked and could be saved later. Discard the scope after failure. Identity/session transactions remain separate. Read consistency (T-14) remains pending.
 
 ---
 

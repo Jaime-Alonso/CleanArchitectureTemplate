@@ -1,3 +1,5 @@
+using CleanTemplate.Application.Contracts;
+using CleanTemplate.Domain.Entities;
 using CleanTemplate.Infrastructure.Extensions;
 using CleanTemplate.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -45,5 +47,30 @@ public sealed class SqliteConnectionIsolationTests
         Assert.NotSame(first.Database.GetDbConnection(), second.Database.GetDbConnection());
         await first.Database.EnsureCreatedAsync();
         Assert.Equal(0, await second.Users.CountAsync());
+    }
+
+    [Fact]
+    public async Task ScopedUnitOfWorkSharesContextWithRepository()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["DatabaseProvider"] = "SqliteInMemory",
+            ["ConnectionStrings:DefaultConnection"] = $"Data Source=uow-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Pooling=False"
+        }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(TimeProvider.System);
+        services.AddInfrastructure(configuration);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Database.EnsureCreatedAsync();
+        var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        Assert.Same(unit, scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        scope.ServiceProvider.GetRequiredService<IProductWriteRepository>().Add(new Product("scoped", null, 1m, 1));
+        Assert.True(await unit.SaveChangesAsync());
+        await using var verifyScope = provider.CreateAsyncScope();
+        Assert.NotSame(unit, verifyScope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        Assert.Equal(1, await verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Set<Product>().CountAsync());
     }
 }

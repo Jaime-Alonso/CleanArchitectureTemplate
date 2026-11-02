@@ -83,7 +83,7 @@ At minimum include:
 - fallback -> `Results.BadRequest(...)`
 
 ## Opinionated Decision (Explicit)
-ADR-0001 (`docs/adr/0001-data-access-and-dependencies.md`) keeps EF Core writes and Dapper reads in Infrastructure behind specific Application contracts. Handlers await contract methods with cancellation and ConfigureAwait(false); handler tests use repository doubles, not simulated EF async LINQ. Follow the current write repository commit convention until T-13 introduces an explicit unit of work; do not invent a parallel commit model.
+ADR-0001 (`docs/adr/0001-data-access-and-dependencies.md`) keeps EF Core writes and Dapper reads in Infrastructure behind specific Application contracts. Handlers await contract methods with cancellation and ConfigureAwait(false); handler tests use repository doubles, not simulated EF async LINQ. Commit using the scoped IUnitOfWork; use its explicit transaction and Result callback for multiple flushes. Return failure for expected business errors to roll back; discard the scope after failure. Flush explicitly with SaveChangesAsync: transaction success does not flush pending changes, which remain tracked and could be saved later.
 
 ## Required Validation
 Run:

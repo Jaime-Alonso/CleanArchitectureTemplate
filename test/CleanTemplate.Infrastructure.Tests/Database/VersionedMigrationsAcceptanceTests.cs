@@ -1,7 +1,11 @@
 using System.Text.RegularExpressions;
+using CleanTemplate.Application.Contracts;
+using CleanTemplate.Domain.Entities;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;
 using CleanTemplate.Infrastructure.Repositories.Writes;
+using CleanTemplate.SharedKernel.Errors;
+using CleanTemplate.SharedKernel.Results;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -13,6 +17,130 @@ namespace CleanTemplate.Infrastructure.Tests.Database;
 
 public sealed class VersionedMigrationsAcceptanceTests
 {
+    [AcceptanceFact]
+    public async Task UnitOfWorkCommitsAndRollsBackMultipleFlushes()
+    {
+        await using var owned = await Database.CreateAsync();
+        await owned.Context.Database.MigrateAsync();
+        await using var db = owned.CreateContext();
+        IProductWriteRepository first = new ProductWriteRepository(db);
+        IProductWriteRepository second = new ProductWriteRepository(db);
+        IUnitOfWork unit = new UnitOfWork(db);
+        var a = new Product("committed-a", null, 1m, 1);
+        var b = new Product("committed-b", null, 1m, 1);
+        var committed = await unit.ExecuteInTransactionAsync(async ct =>
+        {
+            first.Add(a);
+            Assert.True(await unit.SaveChangesAsync(ct));
+            second.Add(b);
+            Assert.True(await unit.SaveChangesAsync(ct));
+            return Result.Success();
+        });
+        Assert.True(committed.IsSuccess);
+        await using (var verify = owned.CreateContext())
+            Assert.Equal(2, await verify.Set<Product>().CountAsync());
+
+        foreach (var cancel in new[] { false, true })
+        {
+            await using var failingDb = owned.CreateContext();
+            IProductWriteRepository one = new ProductWriteRepository(failingDb);
+            IProductWriteRepository two = new ProductWriteRepository(failingDb);
+            IUnitOfWork failing = new UnitOfWork(failingDb);
+            using var cts = new CancellationTokenSource();
+            await Assert.ThrowsAnyAsync<Exception>(() => failing.ExecuteInTransactionAsync(async ct =>
+            {
+                one.Add(new Product("rolled-back-a", null, 1m, 1));
+                Assert.True(await failing.SaveChangesAsync(ct));
+                two.Add(new Product("rolled-back-b", null, 1m, 1));
+                if (cancel)
+                {
+                    cts.Cancel();
+                    ct.ThrowIfCancellationRequested();
+                }
+                throw new InvalidOperationException("intermediate failure");
+            }, cts.Token));
+            Assert.Empty(failingDb.ChangeTracker.Entries());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => failing.SaveChangesAsync());
+            await using var verify = owned.CreateContext();
+            Assert.Equal(2, await verify.Set<Product>().CountAsync());
+        }
+    }
+
+    [AcceptanceFact]
+    public async Task BusinessFailureAfterFlushRollsBackAndInvalidatesScope()
+    {
+        await using var owned = await Database.CreateAsync();
+        await owned.Context.Database.MigrateAsync();
+        await using var db = owned.CreateContext();
+        IUnitOfWork unit = new UnitOfWork(db);
+        var error = Error.Validation("Product.BusinessRule", "Business rule failed.");
+        var expected = Result.Failure(error);
+
+        var result = await unit.ExecuteInTransactionAsync(async ct =>
+        {
+            db.Add(new Product("flushed", null, 1m, 1));
+            Assert.True(await unit.SaveChangesAsync(ct));
+            Assert.Equal(1, await db.Set<Product>().CountAsync(ct));
+            db.Add(new Product("unflushed", null, 1m, 1));
+            return expected;
+        });
+
+        Assert.Same(expected, result);
+        Assert.Equal(error, result.FirstError);
+        Assert.Empty(db.ChangeTracker.Entries());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => unit.SaveChangesAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => unit.ExecuteInTransactionAsync(_ => Task.FromResult(Result.Success())));
+        await using var verify = owned.CreateContext();
+        Assert.Equal(0, await verify.Set<Product>().CountAsync());
+    }
+
+    [AcceptanceFact]
+    public async Task TransactionDoesNotFlushPendingChangesOnSuccess()
+    {
+        await using var owned = await Database.CreateAsync();
+        await owned.Context.Database.MigrateAsync();
+        await using var db = owned.CreateContext();
+        IUnitOfWork unit = new UnitOfWork(db);
+        var result = await unit.ExecuteInTransactionAsync(ct =>
+        {
+            db.Add(new Product("unflushed", null, 1m, 1));
+            return Task.FromResult(Result.Success());
+        });
+        Assert.True(result.IsSuccess);
+        await using var verify = owned.CreateContext();
+        Assert.Equal(0, await verify.Set<Product>().CountAsync());
+    }
+
+    [AcceptanceFact]
+    public async Task ConcurrencyConflictAfterFlushAbortsEvenWhenCallbackIgnoresConflict()
+    {
+        await using var owned = await Database.CreateAsync();
+        await owned.Context.Database.MigrateAsync();
+        var product = new Product("original", null, 1m, 1);
+        owned.Context.Add(product);
+        await owned.Context.SaveChangesAsync();
+        await using var staleDb = owned.CreateContext();
+        await using var winnerDb = owned.CreateContext();
+        IProductWriteRepository staleRepository = new ProductWriteRepository(staleDb);
+        var stale = (await staleRepository.GetByIdAsync(product.Id))!;
+        var winner = (await new ProductWriteRepository(winnerDb).GetByIdAsync(product.Id))!;
+        winner.Update("winner", null, 2m, 2);
+        Assert.True(await new UnitOfWork(winnerDb).SaveChangesAsync());
+
+        IUnitOfWork unit = new UnitOfWork(staleDb);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => unit.ExecuteInTransactionAsync(async ct =>
+        {
+            new ProductWriteRepository(staleDb).Add(new Product("rolled back", null, 1m, 1));
+            Assert.True(await unit.SaveChangesAsync(ct));
+            stale.Update("stale", null, 3m, 3);
+            Assert.False(await unit.SaveChangesAsync(ct));
+            return Result.Success();
+        }));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => unit.SaveChangesAsync());
+        await using var verify = owned.CreateContext();
+        Assert.Equal("winner", (await verify.Set<Product>().SingleAsync()).Name);
+    }
+
     [AcceptanceFact]
     public async Task ProductVersionUpgradePreservesExistingProductAndRejectsStaleWrites()
     {
@@ -34,8 +162,8 @@ public sealed class VersionedMigrationsAcceptanceTests
         Assert.Equal("legacy", a.Name);
         a.Update("winner", null, 13m, 5);
         b.Update("loser", null, 14m, 6);
-        Assert.True(await first.TrySaveChangesAsync());
-        Assert.False(await second.TrySaveChangesAsync());
+        Assert.True(await new UnitOfWork(db).SaveChangesAsync());
+        Assert.False(await new UnitOfWork(other).SaveChangesAsync());
         other.ChangeTracker.Clear();
         var saved = (await second.GetByIdAsync(id))!;
         Assert.Equal("winner", saved.Name);
@@ -43,9 +171,9 @@ public sealed class VersionedMigrationsAcceptanceTests
         db.ChangeTracker.Clear();
         var stale = (await first.GetByIdAsync(id))!;
         saved.Update("newer", null, 15m, 7);
-        Assert.True(await second.TrySaveChangesAsync());
+        Assert.True(await new UnitOfWork(other).SaveChangesAsync());
         first.Remove(stale);
-        Assert.False(await first.TrySaveChangesAsync());
+        Assert.False(await new UnitOfWork(db).SaveChangesAsync());
         db.ChangeTracker.Clear();
         Assert.Equal("newer", (await first.GetByIdAsync(id))!.Name);
     }

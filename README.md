@@ -277,7 +277,7 @@ var product = await _productWriteRepository.GetByIdAsync(request.Id, cancellatio
     .ConfigureAwait(false);
 ```
 
-New features add specific contracts and Infrastructure adapters, not `*DbContextExtensions.cs` in Application. The current write contract still exposes `SaveChangesAsync`; moving commit ownership to an explicit unit of work is pending T-13. Read-replica consistency remains pending T-14.
+New features add specific contracts and Infrastructure adapters, not `*DbContextExtensions.cs` in Application. Commit via the scoped `IUnitOfWork`; use `ExecuteInTransactionAsync` with a `Result` callback for multiple flushes. A failure result rolls back and invalidates the scope. Call `SaveChangesAsync` explicitly: transaction success does not flush pending changes, which remain tracked and could be saved later. Discard the scope after failure. This does not coordinate identity/session workflows or other contexts. Read-replica consistency remains pending T-14.
 
 ---
 

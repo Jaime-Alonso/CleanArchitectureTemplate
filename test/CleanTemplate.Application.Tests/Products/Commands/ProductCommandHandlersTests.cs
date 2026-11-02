@@ -4,6 +4,7 @@ using CleanTemplate.Application.Products.Commands.DeleteProduct;
 using CleanTemplate.Application.Products.Commands.UpdateProduct;
 using CleanTemplate.Domain.Entities;
 using CleanTemplate.SharedKernel.Errors;
+using CleanTemplate.SharedKernel.Results;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CleanTemplate.Application.Tests.Products.Commands;
@@ -35,7 +36,7 @@ public sealed class ProductCommandHandlersTests
     public async Task CreateProductCommand_CreatesEntityAndReturnsId()
     {
         IProductWriteRepository repository = new FakeProductWriteRepository();
-        var handler = new CreateProductCommandHandler(repository, NullLogger<CreateProductCommandHandler>.Instance);
+        var handler = new CreateProductCommandHandler(repository, new FakeUnitOfWork(), NullLogger<CreateProductCommandHandler>.Instance);
 
         var command = new CreateProductCommand
         {
@@ -59,7 +60,7 @@ public sealed class ProductCommandHandlersTests
     public async Task UpdateProductCommand_WhenProductMissing_ReturnsNotFoundFailure()
     {
         IProductWriteRepository repository = new FakeProductWriteRepository();
-        var handler = new UpdateProductCommandHandler(repository, NullLogger<UpdateProductCommandHandler>.Instance);
+        var handler = new UpdateProductCommandHandler(repository, new FakeUnitOfWork(), NullLogger<UpdateProductCommandHandler>.Instance);
 
         var command = new UpdateProductCommand
         {
@@ -83,9 +84,8 @@ public sealed class ProductCommandHandlersTests
         IProductWriteRepository repository = new FakeProductWriteRepository();
         var product = new Domain.Entities.Product("Monitor", "4K", 300m, 3);
         repository.Add(product);
-        await repository.SaveChangesAsync();
 
-        var handler = new DeleteProductCommandHandler(repository, NullLogger<DeleteProductCommandHandler>.Instance);
+        var handler = new DeleteProductCommandHandler(repository, new FakeUnitOfWork(), NullLogger<DeleteProductCommandHandler>.Instance);
         var command = new DeleteProductCommand { Id = product.Id, ExpectedVersion = product.Version };
 
         var result = await handler.Handle(command, CancellationToken.None);
@@ -93,6 +93,12 @@ public sealed class ProductCommandHandlersTests
         Assert.True(result.IsSuccess);
         var removed = await repository.GetByIdAsync(product.Id, CancellationToken.None);
         Assert.Null(removed);
+    }
+
+    private sealed class FakeUnitOfWork : IUnitOfWork
+    {
+        public Task<bool> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<Result> ExecuteInTransactionAsync(Func<CancellationToken, Task<Result>> operation, CancellationToken cancellationToken = default) => operation(cancellationToken);
     }
 
     private sealed class FakeProductWriteRepository : IProductWriteRepository
@@ -114,11 +120,6 @@ public sealed class ProductCommandHandlersTests
             _products.Remove(product);
         }
 
-        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(1);
-        }
 
-        public Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
     }
 }

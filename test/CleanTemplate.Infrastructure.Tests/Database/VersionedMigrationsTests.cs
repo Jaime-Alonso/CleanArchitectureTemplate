@@ -32,8 +32,8 @@ public sealed class VersionedMigrationsTests
         var b = (await second.GetByIdAsync(product.Id))!;
         a.Update("winner", null, 2m, 2);
         b.Update("loser", null, 3m, 3);
-        Assert.True(await first.TrySaveChangesAsync());
-        Assert.False(await second.TrySaveChangesAsync());
+        Assert.True(await new UnitOfWork(firstContext).SaveChangesAsync());
+        Assert.False(await new UnitOfWork(secondContext).SaveChangesAsync());
         secondContext.ChangeTracker.Clear();
         var current = (await second.GetByIdAsync(product.Id))!;
         Assert.Equal("winner", current.Name);
@@ -41,9 +41,9 @@ public sealed class VersionedMigrationsTests
         firstContext.ChangeTracker.Clear();
         var stale = (await first.GetByIdAsync(product.Id))!;
         current.Update("newer", null, 4m, 4);
-        Assert.True(await second.TrySaveChangesAsync());
+        Assert.True(await new UnitOfWork(secondContext).SaveChangesAsync());
         first.Remove(stale);
-        Assert.False(await first.TrySaveChangesAsync());
+        Assert.False(await new UnitOfWork(firstContext).SaveChangesAsync());
         firstContext.ChangeTracker.Clear();
         Assert.Equal("newer", (await first.GetByIdAsync(product.Id))!.Name);
     }

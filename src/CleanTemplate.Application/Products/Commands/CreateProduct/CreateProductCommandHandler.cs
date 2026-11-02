@@ -6,9 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace CleanTemplate.Application.Products.Commands.CreateProduct;
 
-public sealed class CreateProductCommandHandler(IProductWriteRepository productWriteRepository, ILogger<CreateProductCommandHandler> logger) : IRequestHandler<CreateProductCommand, Result<Guid>>
+public sealed class CreateProductCommandHandler(IProductWriteRepository productWriteRepository, IUnitOfWork unitOfWork, ILogger<CreateProductCommandHandler> logger) : IRequestHandler<CreateProductCommand, Result<Guid>>
 {
     private readonly IProductWriteRepository _productWriteRepository = productWriteRepository;
+    private readonly IUnitOfWork _unitOfWork = unitOfWork;
     private readonly ILogger<CreateProductCommandHandler> _logger = logger;
 
     public async Task<Result<Guid>> Handle(CreateProductCommand request, CancellationToken cancellationToken)
@@ -20,7 +21,8 @@ public sealed class CreateProductCommandHandler(IProductWriteRepository productW
             request.Stock);
 
         _productWriteRepository.Add(product);
-        await _productWriteRepository.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (!await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false))
+            throw new InvalidOperationException("Unexpected concurrency conflict while creating a product.");
 
         _logger.LogInformation("Product created successfully. ProductId {ProductId}", product.Id);
 
