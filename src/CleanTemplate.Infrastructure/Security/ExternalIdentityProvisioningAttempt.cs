@@ -2,7 +2,7 @@ using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Identity;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;

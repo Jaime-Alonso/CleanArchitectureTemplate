@@ -91,6 +91,7 @@ Crosscutting contains outer-layer hosting utilities, not pure core primitives. P
 ### Data Access Decision (ADR-0001)
 
 - Application uses specific write repositories and read-query contracts, never DbContext, IQueryable, EF Core or Dapper.
+- Application contracts are grouped under `Contracts/Persistence`, `Contracts/Identity` and `Contracts/Caching`; product projections use `IProductQueries`.
 - Infrastructure implements EF Core writes and Dapper reads; Dapper remains in the current base profile.
 - Do not recreate the removed generic context contract or Application DbContext extension methods.
 - Application owns commits through the scoped `IUnitOfWork`, shared with write repositories. Multiple flushes require `ExecuteInTransactionAsync` and a `Result` callback: failure rolls back and invalidates the scope. Flush explicitly with `SaveChangesAsync`; transaction success does not flush pending changes, which remain tracked and could be saved later. Discard the scope after failure. Identity/session transactions remain separate. Product reads default to the primary; an explicit replica is eventually consistent and does not guarantee read-after-write. See README for legacy configuration migration and pagination limits.

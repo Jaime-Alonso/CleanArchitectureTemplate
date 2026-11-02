@@ -308,10 +308,12 @@ Rules:
 
 [ADR-0001](docs/adr/0001-data-access-and-dependencies.md) defines the single data-access model used by the code and feature-generation instructions:
 
-- Application defines specific contracts: `IProductWriteRepository` for aggregate changes and `IProductReadRepository` for projected queries.
+- Application groups contracts by responsibility in `Contracts/Persistence`, `Contracts/Identity` and `Contracts/Caching`. Persistence exposes `IProductWriteRepository` for aggregate changes and `IProductQueries` for projected queries.
 - Infrastructure implements writes with EF Core and reads with Dapper. Dapper remains in the current base profile, not an optional generator switch.
 - Application does not reference EF Core, Dapper, `DbContext` or `IQueryable`. The unused generic context abstraction has been removed.
 - Handlers await contract methods with cancellation; tests use repository doubles. Persistence adapters require relational tests.
+
+**Source compatibility:** external consumers must update imports to `CleanTemplate.Application.Contracts.Persistence`, `CleanTemplate.Application.Contracts.Identity` or `CleanTemplate.Application.Contracts.Caching` and replace `IProductReadRepository` with `IProductQueries`. No compatibility aliases are provided. This refactor does not change the HTTP or database contracts.
 
 For example, an update handler loads its aggregate through the write contract:
 

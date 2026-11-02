@@ -1,13 +1,13 @@
 using System.Data;
 using CleanTemplate.Application.Common.Pagination;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Persistence;
 using CleanTemplate.Application.Products.ReadModels;
 using CleanTemplate.Infrastructure.Database;
 using Dapper;
 
 namespace CleanTemplate.Infrastructure.Repositories.Reads;
 
-public sealed class ProductReadRepository : IProductReadRepository
+public sealed class ProductReadRepository : IProductQueries
 {
     static ProductReadRepository()
     {

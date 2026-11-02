@@ -7,7 +7,7 @@ using System.Text;
 using CleanTemplate.Api.Endpoints;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Api.Security.Extensions;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Identity;
 using CleanTemplate.Application.Extensions;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Application.Security.Commands.RefreshToken;

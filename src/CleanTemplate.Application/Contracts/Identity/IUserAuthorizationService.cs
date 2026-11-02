@@ -1,6 +1,6 @@
 using CleanTemplate.Application.Security;
 
-namespace CleanTemplate.Application.Contracts;
+namespace CleanTemplate.Application.Contracts.Identity;
 
 public interface IUserAuthorizationService
 {

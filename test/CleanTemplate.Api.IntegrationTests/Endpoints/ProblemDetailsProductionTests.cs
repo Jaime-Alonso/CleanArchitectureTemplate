@@ -4,7 +4,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using CleanTemplate.Application.Common.Pagination;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Identity;
+using CleanTemplate.Application.Contracts.Persistence;
 using CleanTemplate.Application.Products.Queries.GetProductById;
 using CleanTemplate.Application.Products.ReadModels;
 using CleanTemplate.Domain.Exceptions;
@@ -202,7 +203,7 @@ public sealed class ProblemDetailsProductionTests
         builder.UseEnvironment("Production");
         builder.ConfigureServices(services =>
         {
-            services.Replace(ServiceDescriptor.Scoped<IProductReadRepository, InjectedReads>());
+            services.Replace(ServiceDescriptor.Scoped<IProductQueries, InjectedReads>());
             services.Replace(ServiceDescriptor.Scoped<IRequestHandler<GetProductByIdQuery, Result<ProductDto>>, InjectedHandler>());
         });
     });
@@ -221,7 +222,7 @@ public sealed class ProblemDetailsProductionTests
         return body;
     }
 
-    private sealed class InjectedReads : IProductReadRepository
+    private sealed class InjectedReads : IProductQueries
     {
         public Task<ProductReadModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) => id.ToString()[^1] switch
         {
@@ -236,7 +237,7 @@ public sealed class ProblemDetailsProductionTests
             => throw new NotImplementedException();
     }
 
-    private sealed class InjectedHandler(IProductReadRepository repository) : IRequestHandler<GetProductByIdQuery, Result<ProductDto>>
+    private sealed class InjectedHandler(IProductQueries repository) : IRequestHandler<GetProductByIdQuery, Result<ProductDto>>
     {
         public Task<Result<ProductDto>> Handle(GetProductByIdQuery request, CancellationToken cancellationToken) => request.Id.ToString()[^1] switch
         {

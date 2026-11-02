@@ -6,7 +6,7 @@
 
 ## Context
 
-Product commands already use `IProductWriteRepository`; queries use `IProductReadRepository` and read models. The generic `IApplicationDbContext` has no consumers. The README and feature generator previously described a different model, with EF operators in Application.
+Product commands already use `IProductWriteRepository`; queries use `IProductQueries` and read models. The generic `IApplicationDbContext` has no consumers. The README and feature generator previously described a different model, with EF operators in Application.
 
 ## Decision
 

@@ -1,4 +1,4 @@
-namespace CleanTemplate.Application.Contracts;
+namespace CleanTemplate.Application.Contracts.Caching;
 
 public interface ICacheService
 {

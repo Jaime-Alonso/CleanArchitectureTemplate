@@ -1,24 +1,13 @@
-using CleanTemplate.Application.Contracts;
-using CleanTemplate.Application.Security;
-using CleanTemplate.Infrastructure.Caching;
 using CleanTemplate.Infrastructure.Caching.Options;
 using CleanTemplate.Infrastructure.Database;
 using CleanTemplate.Infrastructure.Identity;
-using CleanTemplate.Infrastructure.Persistence;
-using CleanTemplate.Infrastructure.Repositories.Reads;
-using CleanTemplate.Infrastructure.Repositories.Writes;
-using CleanTemplate.Infrastructure.Security;
-using CleanTemplate.Infrastructure.Security.Options;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace CleanTemplate.Infrastructure.Extensions;
 
-public static class ServiceCollectionExtensions
+public static partial class ServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
@@ -30,183 +19,16 @@ public static class ServiceCollectionExtensions
             ? configuredConnectionString ?? "Data Source=CleanTemplateInMemory;Mode=Memory;Cache=Shared"
             : configuredConnectionString ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-        if (provider == DatabaseProvider.SqliteInMemory)
-        {
-            var sqliteOptions = new SqliteConnectionStringBuilder(connectionString);
-            if (sqliteOptions.Mode != SqliteOpenMode.Memory || sqliteOptions.Cache != SqliteCacheMode.Shared
-                || string.IsNullOrWhiteSpace(sqliteOptions.DataSource) || sqliteOptions.DataSource == ":memory:")
-            {
-                throw new InvalidOperationException("SqliteInMemory requires a named database with Mode=Memory;Cache=Shared for isolated request connections.");
-            }
-
-            services.AddSingleton(sp =>
-            {
-                var keepAliveConnection = new SqliteConnection(connectionString);
-                keepAliveConnection.Open();
-
-                var appLifetime = sp.GetService<IHostApplicationLifetime>();
-                appLifetime?.ApplicationStopping.Register(() => keepAliveConnection.Close());
-
-                return keepAliveConnection;
-            });
-        }
-
-        services.AddDbContext<ApplicationDbContext>((sp, options) =>
-        {
-            switch (provider)
-            {
-                case DatabaseProvider.SqlServer:
-                    options.UseSqlServer(connectionString, sql => sql.MigrationsAssembly("CleanTemplate.Migrations.SqlServer"));
-                    break;
-                case DatabaseProvider.PostgreSql:
-                    options.UseNpgsql(connectionString, sql => sql.MigrationsAssembly("CleanTemplate.Migrations.PostgreSql"));
-                    break;
-                case DatabaseProvider.SqliteInMemory:
-                    _ = sp.GetRequiredService<SqliteConnection>(); // Keep the named memory database alive, not a shared request connection.
-                    options.UseSqlite(connectionString);
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unsupported database provider '{provider}'.");
-            }
-        });
-
-        services
-            .AddOptions<ExternalRoleMappingOptions>()
-            .Bind(configuration.GetSection("Auth:Provisioning"))
-            .Validate(options => options.RoleGrantLifetimeMinutes is >= 1 and <= 60,
-                "Auth:Provisioning:RoleGrantLifetimeMinutes must be between 1 and 60.")
-            .ValidateOnStart();
-
-        services
-            .AddOptions<RefreshTokenOptions>()
-            .Bind(configuration.GetSection("Auth:Schemes:LocalJwt"))
-            .Validate(options => options.RefreshTokenDays is >= 1 and <= 90 && options.AbsoluteSessionDays is >= 1 and <= 90,
-                "RefreshTokenDays and AbsoluteSessionDays must be between 1 and 90.")
-            .ValidateOnStart();
-
-        services
-            .AddOptions<LocalJwtOptions>()
-            .Bind(configuration.GetSection("Auth:Schemes:LocalJwt"))
-            .ValidateOnStart();
-
-        services
-            .AddOptions<RefreshTokenCleanupOptions>()
-            .Bind(configuration.GetSection(RefreshTokenCleanupOptions.SectionName))
-            .ValidateOnStart();
-
-        services
-            .AddOptions<IdentitySeedOptions>()
-            .Bind(configuration.GetSection("IdentitySeed"))
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.AdminEmail),
-                "IdentitySeed:AdminEmail must be configured.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.AdminPassword),
-                "IdentitySeed:AdminPassword must be configured via user-secrets or environment variables.")
-            .Validate(
-                options => !options.AdminPassword.StartsWith("__SET_VIA_", StringComparison.Ordinal),
-                "IdentitySeed:AdminPassword is using a placeholder value. Configure a real password via user-secrets or environment variables.");
-
-        services
-            .AddOptions<CacheOptions>()
-            .Bind(configuration.GetSection(CacheOptions.SectionName))
-            .Validate(options => options.DefaultTtlSeconds > 0, "Caching:DefaultTtlSeconds must be greater than zero.")
-            .Validate(options => !string.IsNullOrWhiteSpace(options.KeyPrefix), "Caching:KeyPrefix must be configured.")
-            .Validate(
-                options => options.Provider != CacheProvider.Redis || !string.IsNullOrWhiteSpace(options.Redis.ConnectionString),
-                "Caching:Redis:ConnectionString must be configured when Caching:Provider is Redis.")
-            .ValidateOnStart();
-
-        services
-            .AddIdentityCore<ApplicationUser>(options =>
-            {
-                options.User.RequireUniqueEmail = true;
-                options.Password.RequireDigit = true;
-                options.Password.RequireUppercase = true;
-                options.Password.RequireLowercase = true;
-                options.Password.RequireNonAlphanumeric = true;
-                options.Password.RequiredLength = 8;
-                options.Password.RequiredUniqueChars = 4;
-
-                options.Lockout.AllowedForNewUsers = true;
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-                options.Lockout.MaxFailedAccessAttempts = 5;
-            })
-            .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<ApplicationDbContext>();
-
+        AddDatabase(services, provider, connectionString);
+        AddIdentityOptions(services, configuration);
+        AddCachingOptions(services, configuration);
+        AddIdentity(services);
         var cacheOptions = configuration.GetSection(CacheOptions.SectionName).Get<CacheOptions>() ?? new CacheOptions();
-
         services.AddScoped<IdentityDataSeeder>();
-
-        switch (cacheOptions.Provider)
-        {
-            case CacheProvider.Memory:
-                services.AddMemoryCache();
-                services.AddSingleton<ICacheService, MemoryCacheService>();
-                break;
-            case CacheProvider.Redis:
-                if (string.IsNullOrWhiteSpace(cacheOptions.Redis.ConnectionString))
-                {
-                    throw new InvalidOperationException("Caching:Redis:ConnectionString must be configured when Caching:Provider is Redis.");
-                }
-
-                services.AddStackExchangeRedisCache(options =>
-                {
-                    options.Configuration = cacheOptions.Redis.ConnectionString;
-                    options.InstanceName = cacheOptions.Redis.InstanceName;
-                });
-                services.AddSingleton<ICacheService, RedisCacheService>();
-                break;
-            default:
-                throw new InvalidOperationException($"Unsupported cache provider '{cacheOptions.Provider}'.");
-        }
-
-        var readMode = configuration["ProductReads:Mode"] ?? "Primary";
-        var replica = configuration.GetConnectionString("ProductReadReplica");
-        var legacyReads = new[] { configuration.GetConnectionString("ReadConnection"), configuration.GetConnectionString("DapperConnection") };
-        if (legacyReads.Any(value => !string.IsNullOrWhiteSpace(value) && value != connectionString))
-        {
-            throw new InvalidOperationException("Legacy ReadConnection/DapperConnection differs from DefaultConnection. Remove it and explicitly configure ProductReads:Mode=Replica and ProductReadReplica if eventual consistency is intended.");
-        }
-
-        string readConnectionString;
-        if (string.Equals(readMode, "Primary", StringComparison.OrdinalIgnoreCase))
-        {
-            if (!string.IsNullOrWhiteSpace(replica))
-                throw new InvalidOperationException("ProductReadReplica requires ProductReads:Mode=Replica.");
-            readConnectionString = connectionString;
-        }
-        else if (string.Equals(readMode, "Replica", StringComparison.OrdinalIgnoreCase))
-        {
-            if (provider == DatabaseProvider.SqliteInMemory || string.IsNullOrWhiteSpace(replica))
-                throw new InvalidOperationException("Replica mode requires ProductReadReplica and a non-SQLite provider.");
-            readConnectionString = replica;
-        }
-        else
-        {
-            throw new InvalidOperationException("ProductReads:Mode must be Primary or Replica.");
-        }
-
-        services.AddSingleton(new ReadDbConnectionFactory(readConnectionString, provider));
-        services.AddSingleton<ISqlDialect>(provider switch
-        {
-            DatabaseProvider.SqlServer => new SqlServerDialect(),
-            DatabaseProvider.PostgreSql => new PostgreSqlDialect(),
-            DatabaseProvider.SqliteInMemory => new SqliteDialect(),
-            _ => throw new InvalidOperationException($"Unsupported database provider '{provider}'.")
-        });
-
-        services.AddScoped<IProductReadRepository, ProductReadRepository>();
-        services.AddScoped<IProductWriteRepository, ProductWriteRepository>();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped<IExternalRoleMapper, ExternalRoleMapper>();
-        services.AddExternalIdentityProvisioning();
-        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
-        services.AddScoped<IAuthUserService, AuthUserService>();
-        services.AddScoped<IUserAuthorizationService, UserAuthorizationService>();
-        services.AddScoped<ILocalJwtTokenGenerator, LocalJwtTokenGenerator>();
-        services.AddHostedService<RefreshTokenCleanupBackgroundService>();
+        AddCaching(services, cacheOptions);
+        AddProductReads(services, configuration, provider, connectionString);
+        AddProductPersistence(services);
+        AddIdentityServices(services);
 
         return services;
     }

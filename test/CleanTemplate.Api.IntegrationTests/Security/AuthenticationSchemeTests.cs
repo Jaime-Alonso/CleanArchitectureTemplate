@@ -5,7 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using CleanTemplate.Api.Security.Extensions;
 using CleanTemplate.Api.Security.Options;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Identity;
 using CleanTemplate.Application.Security;
 using CleanTemplate.SharedKernel.Results;
 using Microsoft.AspNetCore.Authentication;

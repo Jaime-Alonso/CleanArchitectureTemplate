@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using CleanTemplate.Api.Security.Options;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Identity;
 using CleanTemplate.Application.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;

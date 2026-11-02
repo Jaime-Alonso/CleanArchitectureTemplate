@@ -38,7 +38,7 @@ Create:
 - `src/CleanTemplate.Application/<FeatureName>/Commands/<UseCaseName>/<UseCaseName>CommandHandler.cs`
 - `src/CleanTemplate.Application/<FeatureName>/Commands/<UseCaseName>/<UseCaseName>CommandValidator.cs`
 
-Reuse or add a specific write repository contract under `Application/Contracts` and its EF implementation in Infrastructure. For reads, use a specific query contract and read models with a Dapper implementation. Register new adapters in Infrastructure DI. Never generate Application DbContext extensions, IQueryable contracts or EF/Dapper package references.
+Reuse or add a specific write repository contract under `Application/Contracts/Persistence` and its EF implementation in Infrastructure. For reads, use a specific query contract (such as `IProductQueries`) under `Application/Contracts/Persistence` and read models with a Dapper implementation. Register new adapters in Infrastructure DI. Never generate Application DbContext extensions, IQueryable contracts or EF/Dapper package references.
 
 ### 2) API Contracts
 Create:

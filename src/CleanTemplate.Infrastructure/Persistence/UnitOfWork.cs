@@ -1,5 +1,5 @@
 using System.Transactions;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Persistence;
 using CleanTemplate.SharedKernel.Results;
 using Microsoft.EntityFrameworkCore;
 

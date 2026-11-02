@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Persistence;
 using CleanTemplate.Application.Products.ReadModels;
 using CleanTemplate.Domain.Entities;
 using CleanTemplate.Infrastructure.Database;

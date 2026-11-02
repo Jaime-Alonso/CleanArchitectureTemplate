@@ -1,13 +1,13 @@
 using CleanTemplate.Application.Common.Pagination;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Persistence;
 using CleanTemplate.Application.Products.ReadModels;
 using Mediora;
 
 namespace CleanTemplate.Application.Products.Queries.GetProducts;
 
-public sealed class GetProductsQueryHandler(IProductReadRepository productReadRepository) : IRequestHandler<GetProductsQuery, PagedResult<ProductListItemDto>>
+public sealed class GetProductsQueryHandler(IProductQueries productQueries) : IRequestHandler<GetProductsQuery, PagedResult<ProductListItemDto>>
 {
-    private readonly IProductReadRepository _productReadRepository = productReadRepository;
+    private readonly IProductQueries _productQueries = productQueries;
 
     public async Task<PagedResult<ProductListItemDto>> Handle(
         GetProductsQuery request,
@@ -24,7 +24,7 @@ public sealed class GetProductsQueryHandler(IProductReadRepository productReadRe
             }
         };
 
-        PagedResult<ProductListItemReadModel> products = await _productReadRepository
+        PagedResult<ProductListItemReadModel> products = await _productQueries
             .GetPagedAsync(criteria, cancellationToken)
             .ConfigureAwait(false);
 

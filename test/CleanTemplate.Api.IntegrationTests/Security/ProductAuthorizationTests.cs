@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CleanTemplate.Api.IntegrationTests.Infrastructure;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Identity;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;

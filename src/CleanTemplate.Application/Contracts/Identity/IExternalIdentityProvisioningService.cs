@@ -1,7 +1,7 @@
 using CleanTemplate.Application.Security;
 using CleanTemplate.SharedKernel.Results;
 
-namespace CleanTemplate.Application.Contracts;
+namespace CleanTemplate.Application.Contracts.Identity;
 
 /// <summary>
 /// Defines the contract for provisioning and synchronizing internal users from external identities.

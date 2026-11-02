@@ -1,6 +1,6 @@
-using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Common.Criteria;
 using CleanTemplate.Application.Common.Pagination;
+using CleanTemplate.Application.Contracts.Persistence;
 using CleanTemplate.Application.Products.Queries.GetProductById;
 using CleanTemplate.Application.Products.Queries.GetProducts;
 using CleanTemplate.Application.Products.ReadModels;
@@ -106,7 +106,7 @@ public sealed class ProductQueryHandlersTests
         Assert.Equal(productId, repository.LastRequestedId);
     }
 
-    private sealed class FakeProductReadRepository : IProductReadRepository
+    private sealed class FakeProductReadRepository : IProductQueries
     {
         public ProductReadModel? Product { get; set; }
         public IReadOnlyList<ProductListItemReadModel> PagedProducts { get; set; } = [];

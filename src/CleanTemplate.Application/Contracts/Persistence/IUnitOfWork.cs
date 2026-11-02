@@ -1,6 +1,6 @@
 using CleanTemplate.SharedKernel.Results;
 
-namespace CleanTemplate.Application.Contracts;
+namespace CleanTemplate.Application.Contracts.Persistence;
 
 /// <summary>Owns persistence for one scoped use case. Discard the scope after a failure.</summary>
 public interface IUnitOfWork

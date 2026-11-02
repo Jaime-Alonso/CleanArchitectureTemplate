@@ -1,5 +1,5 @@
 using System.Text.Json;
-using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Contracts.Caching;
 using CleanTemplate.Infrastructure.Caching.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
