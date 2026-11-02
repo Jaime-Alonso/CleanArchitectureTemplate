@@ -61,6 +61,8 @@ try {
             Write-Host "Running versioned migrations acceptance on $current (isolated migrated databases)."
             dotnet test (Join-Path $root 'test/CleanTemplate.Infrastructure.Tests/CleanTemplate.Infrastructure.Tests.csproj') -c Release --nologo --filter 'FullyQualifiedName~VersionedMigrationsAcceptanceTests'
             if ($LASTEXITCODE -ne 0) { throw "$current versioned migrations acceptance failed." }
+            dotnet test (Join-Path $root 'test/CleanTemplate.Api.IntegrationTests/CleanTemplate.Api.IntegrationTests.csproj') -c Release --nologo --filter 'FullyQualifiedName~DeploymentAcceptanceTests'
+            if ($LASTEXITCODE -ne 0) { throw "$current deployment acceptance failed." }
         }
         finally {
             if ($created) {

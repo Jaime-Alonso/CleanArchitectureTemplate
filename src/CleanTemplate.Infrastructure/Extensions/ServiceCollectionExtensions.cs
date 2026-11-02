@@ -105,8 +105,7 @@ public static class ServiceCollectionExtensions
                 "IdentitySeed:AdminPassword must be configured via user-secrets or environment variables.")
             .Validate(
                 options => !options.AdminPassword.StartsWith("__SET_VIA_", StringComparison.Ordinal),
-                "IdentitySeed:AdminPassword is using a placeholder value. Configure a real password via user-secrets or environment variables.")
-            .ValidateOnStart();
+                "IdentitySeed:AdminPassword is using a placeholder value. Configure a real password via user-secrets or environment variables.");
 
         services
             .AddOptions<CacheOptions>()

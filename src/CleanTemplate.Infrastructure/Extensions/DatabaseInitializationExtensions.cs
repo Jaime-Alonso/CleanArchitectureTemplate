@@ -30,7 +30,7 @@ public static class DatabaseInitializationExtensions
             throw new InvalidOperationException("No versioned migrations were found for the configured database provider.");
         }
 
-        // Temporary startup integration until deployment migration and bootstrap are separated (T-10).
+        // Called explicitly by the deployment migration operation.
         await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
     }
 }

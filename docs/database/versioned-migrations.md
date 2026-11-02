@@ -14,11 +14,9 @@
   antes de publicar, revisar la migración y ambos snapshots. Una vez publicada,
   añadir migraciones nuevas: no reescribir un historial aplicado.
 
-**Limitación temporal:** hasta T-10, el arranque todavía ejecuta `MigrateAsync` y
-el seeder administrativo. No se ha separado la cuenta runtime de DDL ni eliminado
-la necesidad de secretos de bootstrap. Este incremento no completa T-10 ni hace
-que el despliegue sea apto para producción. No se usa `EnsureCreated` para SQL
-Server/PostgreSQL, ni como fallback por ausencia de migraciones.
+El arranque runtime no ejecuta migraciones ni bootstrap para bases persistentes.
+Véase [operaciones de despliegue](deployment-operations.md) para comandos, permisos
+y límites. No se usa `EnsureCreated` para SQL Server/PostgreSQL.
 
 ## Generar y revisar scripts sin arrancar la API
 
@@ -40,7 +38,7 @@ los scripts y almacenarlos como artefactos de despliegue, no como secretos.
    despliegue autorizada. Los scripts son idempotentes mediante `__EFMigrationsHistory`.
 3. Verificar las tablas, índices, claves foráneas e historial; volver a ejecutar el
    script y confirmar que no altera datos ni duplica entradas del historial.
-4. Configurar la API con el mismo motor y base. Recordar la limitación temporal de T-10.
+4. Ejecutar el bootstrap explícito si corresponde y configurar la API con el mismo motor y base, siguiendo la guía de operaciones.
 
 En una base **aislada de pruebas** se puede usar directamente EF:
 
@@ -134,4 +132,4 @@ No es una conversión universal ni una certificación productiva.
 `dotnet test CleanArchitectureTemplate.slnx -c Release --nologo` superó 240 pruebas,
 sin fallos, con 4 omitidas: son las cuatro pruebas de aceptación real que requieren
 el ejecutor anterior (ejecutadas sin omisión en cada motor). Desglose: 7 Domain,
-19 Application, 38 Architecture, 108 Infrastructure y 68 API. T-10 sigue pendiente.
+19 Application, 38 Architecture, 108 Infrastructure y 68 API. Esta evidencia corresponde a T-09; para T-10 véase la guía de operaciones.

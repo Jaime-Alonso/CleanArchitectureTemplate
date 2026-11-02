@@ -13,8 +13,8 @@ The template is designed to be:
 ## Before You Start
 
 > [!IMPORTANT]
-> Before running the host for the first time, configure a JWT signing key and admin seed password outside the repository.
-> The committed development settings deliberately contain no usable credentials. Missing secrets cause configuration validation to fail.
+> For the default ephemeral Development database, configure a JWT signing key and admin seed password outside the repository.
+> Persistent deployments use explicit migration and bootstrap operations; runtime does not require the bootstrap password. See [deployment operations](docs/database/deployment-operations.md).
 
 With PowerShell 7.2 or later and the .NET SDK, initialize unique local values:
 
@@ -360,21 +360,16 @@ For local development, prefer user-secrets instead of editing `appsettings.json`
 
 Note: the template intentionally keeps Local JWT signing key values empty in `appsettings*.json`. Startup validation fails until you provide real values through user-secrets or environment variables.
 
-```bash
-dotnet user-secrets --project src/CleanTemplate.Host/CleanTemplate.Host.csproj set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=cleantemplate;Username=postgres;Password=<your-password>"
-dotnet user-secrets --project src/CleanTemplate.Host/CleanTemplate.Host.csproj set "ConnectionStrings:DapperConnection" "Host=localhost;Database=cleantemplate;Username=postgres;Password=<your-password>"
-dotnet user-secrets --project src/CleanTemplate.Host/CleanTemplate.Host.csproj set "Auth:Schemes:LocalJwt:SigningKey" "<dev-signing-key>"
-dotnet user-secrets --project src/CleanTemplate.Host/CleanTemplate.Host.csproj set "IdentitySeed:AdminPassword" "<dev-admin-password>"
-```
+Use `scripts/Initialize-DevelopmentSecrets.ps1` for local generated secrets, or inject configuration with your secret-management tooling. Do not put secret values in command arguments or shell history.
 
 ### Local bootstrap account
 
-At startup, the app seeds roles (`Admin`, `User`) and a local admin account:
+Only for the in-memory SQLite database in Development/Testing, startup initializes roles (`Admin`, `User`) and a local admin account:
 
 - Email: `admin@local.template`
 - Password: configured through `IdentitySeed:AdminPassword` (required)
 
-The template intentionally ships with a placeholder password value in `appsettings*.json`. If you do not set `IdentitySeed:AdminPassword` via user-secrets or environment variables, startup validation fails.
+The template ships with a placeholder password. The ephemeral initializer requires a real password. Persistent databases are never migrated or seeded at API startup; see [deployment operations](docs/database/deployment-operations.md).
 
 ### Security hardening implemented
 
@@ -493,4 +488,4 @@ SQL Server y PostgreSQL disponen de migraciones independientes. Consulta
 [la guía de migraciones](docs/database/versioned-migrations.md) antes de actualizar
 una base, especialmente si fue creada con `EnsureCreated`. SQLite queda reservado
 a bases en memoria de Development/Testing. La separación del arranque, migraciones
-y bootstrap administrativo (T-10) sigue pendiente.
+y bootstrap administrativo se ejecutan como operaciones explícitas; consulte [operaciones de despliegue](docs/database/deployment-operations.md).

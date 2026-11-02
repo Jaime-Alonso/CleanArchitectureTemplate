@@ -8,6 +8,7 @@ using CleanTemplate.Crosscutting.RateLimiting;
 using CleanTemplate.Host.Extensions;
 using CleanTemplate.Infrastructure.Extensions;
 using CleanTemplate.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -18,7 +19,28 @@ try
 {
     Log.Information("Starting CleanTemplate application...");
 
-    var builder = WebApplication.CreateBuilder(args);
+    var operation = args.Length > 0 && args[0] is "migrate" or "bootstrap-admin" ? args[0] : null;
+    if (operation is not null && args.Length != 1)
+        throw new InvalidOperationException("Operations do not accept additional arguments.");
+    if (args.Any(a => a.StartsWith("--operation", StringComparison.Ordinal)))
+        throw new InvalidOperationException("Unsupported operation.");
+    var builder = WebApplication.CreateBuilder(operation is "migrate" or "bootstrap-admin" ? [] : args);
+
+    if (operation is "migrate" or "bootstrap-admin")
+    {
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddInfrastructure(builder.Configuration);
+        await using var operationHost = builder.Build();
+        using var scope = operationHost.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        if (db.Database.IsSqlite())
+            throw new InvalidOperationException("Operations require a persistent database provider.");
+        if (operation == "migrate")
+            await db.InitializeDatabaseAsync(false);
+        else
+            await scope.ServiceProvider.GetRequiredService<CleanTemplate.Infrastructure.Identity.IdentityDataSeeder>().SeedAsync();
+        return 0;
+    }
 
     builder.Services.AddSingleton(TimeProvider.System);
 
