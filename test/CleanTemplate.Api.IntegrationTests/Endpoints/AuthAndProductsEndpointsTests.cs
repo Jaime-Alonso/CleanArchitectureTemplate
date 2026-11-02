@@ -3,6 +3,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CleanTemplate.Api.IntegrationTests.Infrastructure;
+using CleanTemplate.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CleanTemplate.Api.IntegrationTests.Endpoints;
 
@@ -169,6 +172,52 @@ public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplica
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", child.AccessToken);
         using var products = await client.GetAsync("/api/products?page=1&pageSize=10");
         Assert.Equal(HttpStatusCode.OK, products.StatusCode);
+    }
+
+    [Fact]
+    public async Task Products_InvalidValuesReturnBadRequestWithoutChangingStoredProduct()
+    {
+        using var client = CreateClient("198.51.100.89");
+        var login = await LoginAsync(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+        var description = string.Concat(Enumerable.Repeat("😀", 500));
+        using var maximum = await client.PostAsJsonAsync("/api/products/", new { Name = "maximum", Description = description, Price = 9999999999999999.99m, Stock = 1 });
+        Assert.Equal(HttpStatusCode.Created, maximum.StatusCode);
+        using var create = await client.PostAsJsonAsync("/api/products/", new { Name = "boundary", Description = description, Price = 1.000m, Stock = 1 });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var id = (await create.Content.ReadFromJsonAsync<CreatedProductResponse>())!.Id;
+        var url = $"/api/products/{id}";
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var count = await db.Set<CleanTemplate.Domain.Entities.Product>().CountAsync();
+        foreach (var (text, price, stock) in new[]
+                 {
+                     (description + "x", 1m, 1),
+                     (description, 9999999999999999.99m + 0.01m, 1),
+                     (description, 1.001m, 1),
+                     (description, -0.01m, 1),
+                     (description, 1m, -1)
+                 })
+        {
+            using var invalidCreate = await client.PostAsJsonAsync("/api/products/", new { Name = "invalid", Description = text, Price = price, Stock = stock });
+            Assert.Equal(HttpStatusCode.BadRequest, invalidCreate.StatusCode);
+            using var invalidUpdate = await client.PutAsJsonAsync(url, new { Name = "changed", Description = text, Price = price, Stock = stock, ExpectedVersion = 1 });
+            Assert.Equal(HttpStatusCode.BadRequest, invalidUpdate.StatusCode);
+            using var read = await client.GetAsync(url);
+            var saved = await read.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("boundary", saved.GetProperty("name").GetString());
+            Assert.Equal(description, saved.GetProperty("description").GetString());
+            Assert.Equal(1m, saved.GetProperty("price").GetDecimal());
+            Assert.Equal(1, saved.GetProperty("stock").GetInt32());
+            Assert.Equal(1, saved.GetProperty("version").GetInt64());
+            Assert.Equal(count, await db.Set<CleanTemplate.Domain.Entities.Product>().CountAsync());
+            var stored = await db.Set<CleanTemplate.Domain.Entities.Product>().AsNoTracking().SingleAsync(p => p.Id == id);
+            Assert.Equal("boundary", stored.Name);
+            Assert.Equal(description, stored.Description);
+            Assert.Equal(1m, stored.Price);
+            Assert.Equal(1, stored.Stock);
+            Assert.Equal(1, stored.Version);
+        }
     }
 
     [Fact]

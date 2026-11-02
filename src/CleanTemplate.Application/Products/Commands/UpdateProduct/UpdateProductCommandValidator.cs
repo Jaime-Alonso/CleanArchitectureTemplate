@@ -15,8 +15,11 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
             .NotEmpty().WithMessage("Name is required")
             .MaximumLength(Product.NameMaxLength).WithMessage($"Name must not exceed {Product.NameMaxLength} characters");
 
+        RuleFor(x => x.Description)
+            .MaximumLength(Product.DescriptionMaxLength);
+
         RuleFor(x => x.Price)
-            .GreaterThanOrEqualTo(0).WithMessage("Price cannot be negative");
+            .Must(Product.IsValidPrice).WithMessage("Price exceeds the supported range or scale");
 
         RuleFor(x => x.Stock)
             .GreaterThanOrEqualTo(0).WithMessage("Stock cannot be negative");

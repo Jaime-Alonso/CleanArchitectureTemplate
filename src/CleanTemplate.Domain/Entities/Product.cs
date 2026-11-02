@@ -6,6 +6,10 @@ namespace CleanTemplate.Domain.Entities;
 public sealed class Product : Entity
 {
     public const int NameMaxLength = 200;
+    public const int DescriptionMaxLength = 1000;
+    public const int PricePrecision = 18;
+    public const int PriceScale = 2;
+    public const decimal PriceMaxValue = 9999999999999999.99m;
 
     public string Name { get; private set; } = null!;
     public string? Description { get; private set; }
@@ -18,6 +22,7 @@ public sealed class Product : Entity
     public Product(string name, string? description, decimal price, int stock)
     {
         ValidateName(name);
+        ValidateDescription(description);
         ValidatePrice(price);
         ValidateStock(stock);
 
@@ -30,14 +35,17 @@ public sealed class Product : Entity
     public void Update(string name, string? description, decimal price, int stock)
     {
         ValidateName(name);
+        ValidateDescription(description);
         ValidatePrice(price);
         ValidateStock(stock);
+
+        var nextVersion = checked(Version + 1);
 
         Name = name;
         Description = description;
         Price = price;
         Stock = stock;
-        Version = checked(Version + 1);
+        Version = nextVersion;
     }
 
     private static void ValidateName(string name)
@@ -53,6 +61,17 @@ public sealed class Product : Entity
     {
         if (price < 0)
             throw new DomainValidationException("Products.Price.Negative", "Price cannot be negative");
+        if (!IsValidPrice(price))
+            throw new DomainValidationException("Products.Price.Invalid", "Price exceeds the supported range or scale");
+    }
+
+    public static bool IsValidPrice(decimal price) =>
+        price >= 0 && price <= PriceMaxValue && decimal.Round(price, PriceScale) == price;
+
+    private static void ValidateDescription(string? description)
+    {
+        if (description?.Length > DescriptionMaxLength)
+            throw new DomainValidationException("Products.Description.TooLong", $"Description cannot exceed {DescriptionMaxLength} characters");
     }
 
     private static void ValidateStock(int stock)

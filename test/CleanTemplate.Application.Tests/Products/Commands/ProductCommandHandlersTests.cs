@@ -11,6 +11,27 @@ namespace CleanTemplate.Application.Tests.Products.Commands;
 public sealed class ProductCommandHandlersTests
 {
     [Fact]
+    public void ValidatorsEnforceProductBoundaries()
+    {
+        var create = new CreateProductCommandValidator();
+        var update = new UpdateProductCommandValidator();
+        var description = string.Concat(Enumerable.Repeat("😀", 500));
+        foreach (var (text, price, valid) in new[]
+                 {
+                     (description, Product.PriceMaxValue, true),
+                     (description, 1.000m, true),
+                     (description + "x", 1m, false),
+                     (description, Product.PriceMaxValue + 0.01m, false),
+                     (description, 1.001m, false),
+                     (description, -0.01m, false)
+                 })
+        {
+            Assert.Equal(valid, create.Validate(new CreateProductCommand { Name = "name", Description = text, Price = price, Stock = 1 }).IsValid);
+            Assert.Equal(valid, update.Validate(new UpdateProductCommand { Id = Guid.NewGuid(), ExpectedVersion = 1, Name = "name", Description = text, Price = price, Stock = 1 }).IsValid);
+        }
+    }
+
+    [Fact]
     public async Task CreateProductCommand_CreatesEntityAndReturnsId()
     {
         IProductWriteRepository repository = new FakeProductWriteRepository();

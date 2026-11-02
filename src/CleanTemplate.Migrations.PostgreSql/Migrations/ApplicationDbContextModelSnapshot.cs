@@ -52,7 +52,16 @@ namespace CleanTemplate.Migrations.PostgreSql.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Products_Description_Utf16Length", "2 * char_length(\"Description\") - char_length(regexp_replace(\"Description\", U&'[\\+010000-\\+10FFFF]', '', 'g')) <= 1000");
+
+                            t.HasCheckConstraint("CK_Products_Name_Utf16Length", "2 * char_length(\"Name\") - char_length(regexp_replace(\"Name\", U&'[\\+010000-\\+10FFFF]', '', 'g')) <= 200");
+
+                            t.HasCheckConstraint("CK_Products_Price_NonNegative", "\"Price\" >= 0 AND \"Price\" <= 9999999999999999.99");
+
+                            t.HasCheckConstraint("CK_Products_Stock_NonNegative", "\"Stock\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("CleanTemplate.Infrastructure.Identity.ApplicationUser", b =>

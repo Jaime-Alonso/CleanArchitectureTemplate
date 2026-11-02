@@ -44,4 +44,41 @@ public sealed class ProductTests
 
         Assert.Throws<DomainValidationException>(() => product.Update("Keyboard", "desc", 10m, -1));
     }
+
+    [Fact]
+    public void Limits_AreEnforcedBeforeUpdateMutatesAnything()
+    {
+        var product = new Product("name", new string('x', Product.DescriptionMaxLength), Product.PriceMaxValue, 0);
+        foreach (var (description, price, stock) in new[]
+                 {
+                     (new string('x', Product.DescriptionMaxLength + 1), 1m, 1),
+                     ("ok", Product.PriceMaxValue + 0.01m, 1),
+                     ("ok", 1.001m, 1),
+                     ("ok", -0.01m, 1),
+                     ("ok", 1m, -1)
+                 })
+        {
+            Assert.Throws<DomainValidationException>(() => product.Update("changed", description, price, stock));
+            Assert.Equal("name", product.Name);
+            Assert.Equal(Product.DescriptionMaxLength, product.Description!.Length);
+            Assert.Equal(Product.PriceMaxValue, product.Price);
+            Assert.Equal(0, product.Stock);
+            Assert.Equal(1, product.Version);
+            Assert.Throws<DomainValidationException>(() => new Product("name", description, price, stock));
+        }
+    }
+
+    [Fact]
+    public void Utf16AndTrailingZerosUseNumericAndDotNetLengthSemantics()
+    {
+        var name = string.Concat(Enumerable.Repeat("😀", 100));
+        var description = string.Concat(Enumerable.Repeat("😀", 500));
+        var product = new Product(name, description, 1.000m, 1);
+        Assert.Equal(1m, product.Price);
+        Assert.Throws<DomainValidationException>(() => new Product(name + "x", description, 1m, 1));
+        Assert.Throws<DomainValidationException>(() => product.Update("changed", description + "x", 1m, 1));
+        Assert.Equal(name, product.Name);
+        Assert.Equal(description, product.Description);
+        Assert.Equal(1, product.Version);
+    }
 }

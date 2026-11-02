@@ -52,7 +52,12 @@ namespace CleanTemplate.Migrations.SqlServer.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Products_Price_NonNegative", "\"Price\" >= 0 AND \"Price\" <= 9999999999999999.99");
+
+                            t.HasCheckConstraint("CK_Products_Stock_NonNegative", "\"Stock\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("CleanTemplate.Infrastructure.Identity.ApplicationUser", b =>

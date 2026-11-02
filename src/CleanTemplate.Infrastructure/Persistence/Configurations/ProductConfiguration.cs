@@ -8,7 +8,11 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
-        builder.ToTable("Products");
+        builder.ToTable("Products", table =>
+        {
+            table.HasCheckConstraint("CK_Products_Price_NonNegative", FormattableString.Invariant($"\"Price\" >= 0 AND \"Price\" <= {Product.PriceMaxValue}"));
+            table.HasCheckConstraint("CK_Products_Stock_NonNegative", "\"Stock\" >= 0");
+        });
 
         builder.HasKey(p => p.Id);
 
@@ -17,10 +21,10 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasMaxLength(Product.NameMaxLength);
 
         builder.Property(p => p.Description)
-            .HasMaxLength(1000);
+            .HasMaxLength(Product.DescriptionMaxLength);
 
         builder.Property(p => p.Price)
-            .HasPrecision(18, 2)
+            .HasPrecision(Product.PricePrecision, Product.PriceScale)
             .IsRequired();
 
         builder.Property(p => p.Stock)

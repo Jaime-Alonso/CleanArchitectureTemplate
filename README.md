@@ -221,6 +221,8 @@ Validation approach in this template is intentional: FluentValidation handles re
 
 Product reads expose `version`; updates and deletes require `expectedVersion` and reject stale writes with HTTP 409. See the [product concurrency contract and upgrade requirements](docs/product-concurrency.md) before updating clients or deploying writers.
 
+Product names and descriptions use shared UTF-16 limits; prices reject values outside decimal(18,2) or requiring rounding. See [product integrity and migration preflight](docs/product-integrity.md) for database guarantees and legacy data remediation.
+
 Time-dependent behavior (for example token issuance/expiration) uses `TimeProvider` via DI instead of calling `DateTime.UtcNow` directly, improving testability.
 
 The host exposes `GET /health` and includes an EF Core `DbContext` health check for basic runtime monitoring.

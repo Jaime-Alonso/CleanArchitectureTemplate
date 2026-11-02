@@ -19,7 +19,8 @@ public sealed class VersionedMigrationsAcceptanceTests
         await using var owned = await Database.CreateAsync();
         var db = owned.Context;
         var migrator = db.GetService<IMigrator>();
-        var previous = db.Database.GetMigrations().Reverse().Skip(1).First();
+        var migrations = db.Database.GetMigrations().ToArray();
+        var previous = migrations.Single(x => x.EndsWith("_AddRefreshTokenFamilies", StringComparison.Ordinal));
         await owned.ExecuteScriptAsync(migrator.GenerateScript(toMigration: previous));
         var id = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Products\" (\"Id\", \"Name\", \"Price\", \"Stock\") VALUES ({id}, {"legacy"}, {12m}, {4})");
@@ -47,6 +48,80 @@ public sealed class VersionedMigrationsAcceptanceTests
         Assert.False(await first.TrySaveChangesAsync());
         db.ChangeTracker.Clear();
         Assert.Equal("newer", (await first.GetByIdAsync(id))!.Name);
+    }
+
+    [AcceptanceFact]
+    public async Task ProductIntegrityUpgradeFailsForInvalidLegacyRowsAndCanBeRetried()
+    {
+        await using var owned = await Database.CreateAsync();
+        var db = owned.Context;
+        var migrator = db.GetService<IMigrator>();
+        var migrations = db.Database.GetMigrations().ToArray();
+        var target = migrations.Single(x => x.EndsWith("_EnforceProductIntegrity", StringComparison.Ordinal));
+        var targetIndex = Array.IndexOf(migrations, target);
+        var previous = migrations[targetIndex - 1];
+        await owned.ExecuteScriptAsync(migrator.GenerateScript(toMigration: previous));
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Products\" (\"Id\", \"Name\", \"Price\", \"Stock\") VALUES ({id}, {"legacy"}, {-1m}, {1})");
+        var upgrade = migrator.GenerateScript(fromMigration: previous, toMigration: target, options: MigrationsSqlGenerationOptions.Idempotent);
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => owned.ExecuteScriptAsync(upgrade));
+        Assert.Contains("Invalid legacy products", error.Message);
+        Assert.Equal(migrations[..targetIndex], await db.Database.GetAppliedMigrationsAsync());
+        Assert.Equal(-1m, await db.Database.SqlQuery<decimal>($"SELECT \"Price\" AS \"Value\" FROM \"Products\" WHERE \"Id\" = {id}").SingleAsync());
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Price\" = {1m} WHERE \"Id\" = {id}");
+        await owned.ExecuteScriptAsync(upgrade);
+        Assert.Equal(migrations[..(targetIndex + 1)], await db.Database.GetAppliedMigrationsAsync());
+        await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Stock\" = {-1} WHERE \"Id\" = {id}"));
+        await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Price\" = {-1m} WHERE \"Id\" = {id}"));
+    }
+
+    [AcceptanceFact]
+    public async Task ProductIntegrityEnforcesUtf16AndRejectsInvalidLegacyData()
+    {
+        await using var owned = await Database.CreateAsync();
+        var db = owned.Context;
+        var migrator = db.GetService<IMigrator>();
+        var migrations = db.Database.GetMigrations().ToArray();
+        var target = migrations.Single(x => x.EndsWith("_EnforceProductIntegrity", StringComparison.Ordinal));
+        var targetIndex = Array.IndexOf(migrations, target);
+        var previous = migrations[targetIndex - 1];
+        await owned.ExecuteScriptAsync(migrator.GenerateScript(toMigration: previous));
+        var id = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Products\" (\"Id\", \"Name\", \"Description\", \"Price\", \"Stock\") VALUES ({id}, {"legacy"}, {"ok"}, {1m}, {1})");
+        var upgrade = migrator.GenerateScript(fromMigration: previous, toMigration: target, options: MigrationsSqlGenerationOptions.Idempotent);
+        if (db.Database.IsNpgsql())
+        {
+            foreach (var column in new[] { "Name", "Description", "Price" })
+            {
+                var invalid = column switch { "Name" => string.Concat(Enumerable.Repeat("😀", 101)), "Description" => string.Concat(Enumerable.Repeat("😀", 501)), _ => "NaN" };
+                if (column == "Price")
+                    await db.Database.ExecuteSqlRawAsync("UPDATE \"Products\" SET \"Price\" = 'NaN'");
+                else if (column == "Name")
+                    await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Name\" = {invalid}");
+                else
+                    await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Description\" = {invalid}");
+                var error = await Assert.ThrowsAnyAsync<Exception>(() => owned.ExecuteScriptAsync(upgrade));
+                Assert.Contains("Invalid legacy products", error.Message);
+                Assert.Equal(migrations[..targetIndex], await db.Database.GetAppliedMigrationsAsync());
+                Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM pg_constraint WHERE conrelid = '\"Products\"'::regclass AND conname LIKE 'CK_Products_%'").SingleAsync());
+                if (column == "Price")
+                    Assert.True(await db.Database.SqlQueryRaw<bool>("SELECT (\"Price\" = 'NaN'::numeric) AS \"Value\" FROM \"Products\"").SingleAsync());
+                else if (column == "Name")
+                    Assert.Equal(invalid, await db.Database.SqlQueryRaw<string>("SELECT \"Name\" AS \"Value\" FROM \"Products\"").SingleAsync());
+                else
+                    Assert.Equal(invalid, await db.Database.SqlQueryRaw<string>("SELECT \"Description\" AS \"Value\" FROM \"Products\"").SingleAsync());
+                await db.Database.ExecuteSqlRawAsync("UPDATE \"Products\" SET \"Name\" = 'legacy', \"Description\" = 'ok', \"Price\" = 1");
+            }
+        }
+        await owned.ExecuteScriptAsync(upgrade);
+        var validName = string.Concat(Enumerable.Repeat("😀", 100));
+        var validDescription = string.Concat(Enumerable.Repeat("😀", 500));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Name\" = {validName}, \"Description\" = {validDescription}, \"Price\" = {9999999999999999.99m}");
+        await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Name\" = {validName + "x"}"));
+        await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Description\" = {validDescription + "x"}"));
+        await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Products\" SET \"Price\" = {9999999999999999.99m + 0.01m}"));
+        if (db.Database.IsNpgsql())
+            await Assert.ThrowsAnyAsync<Exception>(() => db.Database.ExecuteSqlRawAsync("UPDATE \"Products\" SET \"Price\" = 'NaN'"));
     }
 
     [AcceptanceFact]
