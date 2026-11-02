@@ -41,12 +41,14 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
         var user = await _authUserService.FindByIdAsync(lookupResult.UserId, cancellationToken).ConfigureAwait(false);
         if (user is null)
         {
+            await _refreshTokenService.RevokeAllForUserAsync(lookupResult.UserId, cancellationToken).ConfigureAwait(false);
             _logger.LogWarning("Refresh token user not found: {UserId}", lookupResult.UserId);
             return Result<AuthSession>.Failure(Error.NotFound("Users.NotFound", $"User '{lookupResult.UserId}' was not found."));
         }
 
         if (await _authUserService.IsLockedOutAsync(user.Id, cancellationToken).ConfigureAwait(false))
         {
+            await _refreshTokenService.RevokeAllForUserAsync(user.Id, cancellationToken).ConfigureAwait(false);
             _logger.LogWarning("Refresh token rejected for locked user {UserId}", user.Id);
             return Result<AuthSession>.Failure(Error.Failure("Auth.LockedOut", "User account is locked."));
         }

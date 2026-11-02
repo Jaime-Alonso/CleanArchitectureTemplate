@@ -34,6 +34,7 @@ public sealed class LogoutCommandHandlerTests
 
     private sealed class FakeRefreshTokenService : IRefreshTokenService
     {
+        public Task RevokeAllForUserAsync(Guid userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public bool WasCalled { get; private set; }
         public string? LastRefreshToken { get; private set; }
 

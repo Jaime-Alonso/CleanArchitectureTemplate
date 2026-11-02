@@ -1,6 +1,6 @@
 # External identity trust and internal authorization
 
-Status: T-01/T-02/T-03/T-08 implementation. Explicit account linking is designed below but has no public endpoint yet. Refresh-session hardening (T-06/T-07) remains separate work. See [role ownership and revocation](role-ownership-and-revocation.md) and [transactional provisioning](transactional-external-provisioning.md) for bounds, migrations, validation limits and mandatory legacy-data review.
+Status: T-01/T-02/T-03/T-08 implementation. Explicit account linking is designed below but has no public endpoint yet. Local refresh-session hardening (T-06/T-07) is implemented separately; see [session policy](refresh-session-families.md). See [role ownership and revocation](role-ownership-and-revocation.md) and [transactional provisioning](transactional-external-provisioning.md) for bounds, migrations, validation limits and mandatory legacy-data review. Local session revocation does not revoke tokens at the external IdP.
 
 ## Trust boundary
 

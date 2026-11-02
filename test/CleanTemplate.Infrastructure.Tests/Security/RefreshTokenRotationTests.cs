@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
+using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;
 using CleanTemplate.Infrastructure.Security;
 using CleanTemplate.Infrastructure.Tests.Testing;
@@ -13,8 +14,8 @@ namespace CleanTemplate.Infrastructure.Tests.Security;
 
 public sealed class RefreshTokenRotationTests
 {
-    private static RefreshTokenService CreateService(ApplicationDbContext db) =>
-        new(db, TimeProvider.System, Options.Create(new RefreshTokenOptions()));
+    private static RefreshTokenService CreateService(ApplicationDbContext db, TimeProvider? time = null, RefreshTokenOptions? options = null) =>
+        new(db, time ?? TimeProvider.System, Options.Create(options ?? new RefreshTokenOptions()));
 
     [Fact]
     public async Task ConcurrentRotationAcrossInstances_ProducesExactlyOneReplacement()
@@ -37,8 +38,12 @@ public sealed class RefreshTokenRotationTests
             Task.Run(() => second.RotateAsync(issued.RefreshToken, userId, "second", null)));
 
         var winner = Assert.Single(results, x => x is not null);
+        var family = Assert.Single(await fixture.ReadAsync(db => db.Set<RefreshTokenFamily>().AsNoTracking().ToListAsync()));
+        Assert.NotNull(family.RevokedAtUtc);
+        Assert.Equal("ReuseDetected", family.RevocationReason);
         Assert.Null(await initial.FindValidAsync(issued.RefreshToken, null));
-        Assert.NotNull(await initial.FindValidAsync(winner!.RefreshToken, null));
+        // Strict reuse policy: the losing refresh revokes the family, including the winner's replacement.
+        Assert.Null(await initial.FindValidAsync(winner!.RefreshToken, null));
         var tokens = await fixture.ReadAsync(db => db.Set<RefreshToken>().AsNoTracking().ToListAsync());
         Assert.Equal(2, tokens.Count);
         var consumed = Assert.Single(tokens, x => x.RevokedAtUtc != null);
@@ -70,6 +75,7 @@ public sealed class RefreshTokenRotationTests
         Assert.Null(original.RevokedAtUtc);
         Assert.Null(original.ReplacedByTokenHash);
         Assert.NotNull(await service.FindValidAsync(issued.RefreshToken, null));
+        Assert.Equal(0, await fixture.ReadAsync(context => context.Set<RefreshTokenFamily>().Select(f => f.Version).SingleAsync()));
         interceptor.Enabled = false;
         Assert.NotNull(await service.RotateAsync(issued.RefreshToken, userId, "retry", null));
     }
@@ -255,7 +261,9 @@ public sealed class RefreshTokenRotationTests
         var replacement = await rotateTask;
         var tokens = await fixture.ReadAsync(db => db.Set<RefreshToken>().AsNoTracking().ToListAsync());
         var original = Assert.Single(tokens, token => token.JwtId == "original");
-        Assert.NotNull(original.RevokedAtUtc);
+        var family = Assert.Single(await fixture.ReadAsync(db => db.Set<RefreshTokenFamily>().AsNoTracking().ToListAsync()));
+        Assert.NotNull(family.RevokedAtUtc);
+        Assert.Equal("Logout", family.RevocationReason);
         if (replacement is null)
         {
             Assert.Single(tokens);
@@ -263,10 +271,10 @@ public sealed class RefreshTokenRotationTests
         }
         else
         {
+            Assert.NotNull(original.RevokedAtUtc);
             Assert.Equal(2, tokens.Count);
             Assert.Equal(Assert.Single(tokens, token => token.JwtId == "replacement").TokenHash, original.ReplacedByTokenHash);
-            // Logout of the original does not revoke descendants until T-07.
-            Assert.NotNull(await initial.FindValidAsync(replacement.RefreshToken, null));
+            Assert.Null(await initial.FindValidAsync(replacement.RefreshToken, null));
         }
     }
 
@@ -310,6 +318,193 @@ public sealed class RefreshTokenRotationTests
         Assert.Null(original.RevokedAtUtc);
         Assert.Null(original.ReplacedByTokenHash);
         Assert.NotNull(await service.RotateAsync(issued.RefreshToken, userId, "retry", null));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LogoutOrReplayOfAncestor_RevokesOnlyItsFamily(bool replay)
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var service = CreateService(db);
+        var userId = Guid.NewGuid();
+        var original = await service.IssueAsync(userId, "original", null);
+        var independent = await service.IssueAsync(userId, "other-session", null);
+        var child = await service.RotateAsync(original.RefreshToken, userId, "child", null);
+        Assert.NotNull(child);
+        var descendant = await service.RotateAsync(child.RefreshToken, userId, "descendant", null);
+        Assert.NotNull(descendant);
+
+        if (replay)
+            Assert.Null(await service.FindValidAsync(original.RefreshToken, null));
+        else
+            Assert.True(await service.RevokeAsync(original.RefreshToken, null));
+
+        Assert.Null(await service.FindValidAsync(descendant.RefreshToken, null));
+        Assert.Null(await service.RotateAsync(descendant.RefreshToken, userId, "rejected", null));
+        Assert.NotNull(await service.FindValidAsync(independent.RefreshToken, null));
+        var families = await fixture.ReadAsync(context => context.Set<RefreshTokenFamily>().AsNoTracking().ToListAsync());
+        Assert.Equal(replay ? "ReuseDetected" : "Logout", Assert.Single(families, f => f.RevokedAtUtc != null).RevocationReason);
+        Assert.Single(families, f => f.RevokedAtUtc == null);
+    }
+
+    [Fact]
+    public async Task RevokeAllForUser_RevokesEverySessionButNotOtherUsers()
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var service = CreateService(scope.ServiceProvider.GetRequiredService<ApplicationDbContext>());
+        var userId = Guid.NewGuid();
+        var first = await service.IssueAsync(userId, "first", null);
+        var second = await service.IssueAsync(userId, "second", null);
+        var unrelated = await service.IssueAsync(Guid.NewGuid(), "unrelated", null);
+
+        await service.RevokeAllForUserAsync(userId);
+        await service.RevokeAllForUserAsync(userId);
+
+        Assert.Null(await service.FindValidAsync(first.RefreshToken, null));
+        Assert.Null(await service.FindValidAsync(second.RefreshToken, null));
+        Assert.NotNull(await service.FindValidAsync(unrelated.RefreshToken, null));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ChangedSecurityStampOrDeletedUser_PreventsFurtherRotation(bool delete)
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = "session-user", SecurityStamp = "before" });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        var issued = await service.IssueAsync(userId, "original", null);
+        if (delete)
+            await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync();
+        else
+            await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.SecurityStamp, "after"));
+
+        Assert.Null(await service.RotateAsync(issued.RefreshToken, userId, "rejected", null));
+
+        var family = Assert.Single(await fixture.ReadAsync(context => context.Set<RefreshTokenFamily>().AsNoTracking().ToListAsync()));
+        Assert.Equal("SecurityStampChanged", family.RevocationReason);
+        Assert.NotNull(family.RevokedAtUtc);
+        Assert.Single(await fixture.ReadAsync(context => context.Set<RefreshToken>().AsNoTracking().ToListAsync()));
+    }
+
+    [Fact]
+    public async Task RotationCannotExtendAbsoluteSessionLifetime()
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var clock = new SessionTimeProvider();
+        var service = CreateService(scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(), clock,
+            new RefreshTokenOptions { RefreshTokenDays = 2, AbsoluteSessionDays = 3 });
+        var userId = Guid.NewGuid();
+        var initialTime = clock.GetUtcNow();
+        var issued = await service.IssueAsync(userId, "original", null);
+        clock.Now = initialTime.AddDays(1.5);
+
+        var child = await service.RotateAsync(issued.RefreshToken, userId, "child", null);
+
+        Assert.NotNull(child);
+        Assert.Equal(initialTime.AddDays(3).UtcDateTime, child.ExpiresAtUtc);
+        Assert.Equal(DateTimeKind.Utc, child.ExpiresAtUtc.Kind);
+        clock.Now = initialTime.AddDays(3);
+        Assert.Null(await service.FindValidAsync(child.RefreshToken, null));
+        Assert.Null(await service.RotateAsync(child.RefreshToken, userId, "expired", null));
+    }
+
+    [Fact]
+    public async Task CleanupRetainsExpiredAncestorsUntilFamilyExpiry_AndReplayStillRevokes()
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var clock = new SessionTimeProvider();
+        var service = CreateService(db, clock, new RefreshTokenOptions { RefreshTokenDays = 2, AbsoluteSessionDays = 5 });
+        var userId = Guid.NewGuid();
+        var start = clock.Now;
+        var issued = await service.IssueAsync(userId, "original", null);
+        clock.Now = start.AddDays(1);
+        var child = await service.RotateAsync(issued.RefreshToken, userId, "child", null);
+        Assert.NotNull(child);
+        clock.Now = start.AddDays(2.5);
+        var cleanup = new RefreshTokenCleanupService(db);
+
+        Assert.Equal(0, await cleanup.CleanupAsync(clock.Now.UtcDateTime, clock.Now.UtcDateTime));
+        Assert.Equal(2, await fixture.ReadAsync(context => context.Set<RefreshToken>().CountAsync()));
+        Assert.Null(await service.FindValidAsync(issued.RefreshToken, null));
+        Assert.Null(await service.FindValidAsync(child.RefreshToken, null));
+        Assert.Equal(1, await cleanup.CleanupAsync(clock.Now.UtcDateTime, clock.Now.UtcDateTime));
+        Assert.Equal(0, await fixture.ReadAsync(context => context.Set<RefreshToken>().CountAsync()));
+        Assert.Equal(0, await fixture.ReadAsync(context => context.Set<RefreshTokenFamily>().CountAsync()));
+    }
+
+    [Fact]
+    public async Task CleanupDeletesExpiredFamilyAndCascadesItsTokens()
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var clock = new SessionTimeProvider();
+        var service = CreateService(db, clock, new RefreshTokenOptions { RefreshTokenDays = 1, AbsoluteSessionDays = 1 });
+        await service.IssueAsync(Guid.NewGuid(), "original", null);
+        clock.Now = clock.Now.AddDays(1);
+
+        Assert.Equal(1, await new RefreshTokenCleanupService(db).CleanupAsync(clock.Now.UtcDateTime, clock.Now.UtcDateTime));
+        Assert.Equal(0, await fixture.ReadAsync(context => context.Set<RefreshToken>().CountAsync()));
+    }
+
+    [Fact]
+    public async Task LegacyTokenWithoutFamily_IsRejectedRatherThanAssignedAnUnsafeFamily()
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var now = DateTime.UtcNow;
+        var userId = Guid.NewGuid();
+        db.Set<RefreshToken>().Add(RefreshToken.Create(userId, "legacy",
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("legacy-token"))), now, now.AddDays(1), null));
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+
+        Assert.Null(await service.FindValidAsync("legacy-token", null));
+        Assert.Null(await service.RotateAsync("legacy-token", userId, "replacement", null));
+        Assert.Equal(0, await fixture.ReadAsync(context => context.Set<RefreshTokenFamily>().CountAsync()));
+    }
+
+    [Fact]
+    public async Task UpgradeFromPreviousSchema_PreservesButRejectsLegacyTokenAndAllowsNewLogin()
+    {
+        await using var fixture = await RefreshTokenDatabaseFixture.CreateLegacySchemaAsync();
+        await using var scope = fixture.First.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var userId = Guid.NewGuid();
+        var id = Guid.NewGuid();
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("old-session")));
+        var now = DateTime.UtcNow;
+        await db.Database.ExecuteSqlAsync($"""
+            INSERT INTO "RefreshTokens" ("Id", "UserId", "TokenHash", "JwtId", "CreatedAtUtc", "ExpiresAtUtc")
+            VALUES ({id}, {userId}, {hash}, {"legacy"}, {now}, {now.AddDays(1)})
+            """);
+        if (!db.Database.IsSqlite())
+            await db.Database.MigrateAsync();
+
+        var service = CreateService(db);
+        Assert.Null(await service.FindValidAsync("old-session", null));
+        Assert.Null((await db.Set<RefreshToken>().AsNoTracking().SingleAsync()).FamilyId);
+        var fresh = await service.IssueAsync(userId, "new-login", null);
+        Assert.NotNull(await service.FindValidAsync(fresh.RefreshToken, null));
+    }
+
+    private sealed class SessionTimeProvider : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = new(2026, 11, 2, 12, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 
     private sealed class CloseConnectionInterceptor : DbTransactionInterceptor

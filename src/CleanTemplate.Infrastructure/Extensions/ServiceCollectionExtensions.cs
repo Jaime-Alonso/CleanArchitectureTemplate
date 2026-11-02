@@ -80,6 +80,8 @@ public static class ServiceCollectionExtensions
         services
             .AddOptions<RefreshTokenOptions>()
             .Bind(configuration.GetSection("Auth:Schemes:LocalJwt"))
+            .Validate(options => options.RefreshTokenDays is >= 1 and <= 90 && options.AbsoluteSessionDays is >= 1 and <= 90,
+                "RefreshTokenDays and AbsoluteSessionDays must be between 1 and 90.")
             .ValidateOnStart();
 
         services

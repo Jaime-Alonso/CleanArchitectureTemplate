@@ -102,6 +102,7 @@ public sealed class LoginCommandHandlerTests
 
     private sealed class FakeRefreshTokenService : IRefreshTokenService
     {
+        public Task RevokeAllForUserAsync(Guid userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<RefreshTokenIssueResult> IssueAsync(Guid userId, string jwtId, string? createdByIp, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new RefreshTokenIssueResult

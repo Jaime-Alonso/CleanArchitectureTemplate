@@ -65,7 +65,7 @@ Configuration/mapping changes require a controlled restart; partial live reload 
 
 Role re-evaluation affects the internal policies `AdminOnly` and `UserOrAdmin` without waiting for local access-token expiration. It does not revoke the JWT signature or make an otherwise valid token unauthenticated. Generic authentication-only endpoints can still recognize the bearer identity without granting internal permissions.
 
-Logout and refresh-token family revocation remain T-06/T-07. This feature neither makes refresh rotation atomic nor revokes refresh-token families. Deleted, locked or demoted users cannot restore lost permissions by refreshing, because permission resolution uses current state; full session lifecycle guarantees remain separate work.
+This role feature itself neither makes refresh rotation atomic nor revokes refresh-token families. T-06/T-07 now add those guarantees separately; see [session policy](refresh-session-families.md). Deleted, locked or demoted users cannot restore lost permissions by refreshing, because permission resolution uses current state. Demotion does not necessarily terminate a lower-privilege session, and already-issued access tokens are not immediately session-revoked.
 
 ## Deployment and legacy assignments
 

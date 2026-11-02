@@ -33,5 +33,6 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
             .IsUnique();
 
         builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc });
+        builder.HasOne<RefreshTokenFamily>().WithMany().HasForeignKey(x => x.FamilyId).OnDelete(DeleteBehavior.Cascade);
     }
 }

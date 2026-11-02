@@ -37,6 +37,7 @@ public sealed class RefreshToken
 
     public Guid Id { get; private set; }
     public Guid UserId { get; private set; }
+    public Guid? FamilyId { get; private set; }
     public string TokenHash { get; private set; } = string.Empty;
     public string JwtId { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
@@ -52,9 +53,12 @@ public sealed class RefreshToken
         string tokenHash,
         DateTime createdAtUtc,
         DateTime expiresAtUtc,
-        string? createdByIp)
+        string? createdByIp,
+        Guid? familyId = null)
     {
-        return new RefreshToken(userId, jwtId, tokenHash, createdAtUtc, expiresAtUtc, createdByIp);
+        var token = new RefreshToken(userId, jwtId, tokenHash, createdAtUtc, expiresAtUtc, createdByIp);
+        token.FamilyId = familyId;
+        return token;
     }
 
     public bool CanBeConsumed(DateTime nowUtc)

@@ -22,6 +22,7 @@ public sealed class VersionedMigrationsTests
         Assert.NotEmpty(migrations);
         Assert.EndsWith("_InitialCreate", migrations[0]);
         Assert.Single(migrations, migration => migration.EndsWith("_EnforceUniqueIdentityEmail", StringComparison.Ordinal));
+        Assert.Single(migrations, migration => migration.EndsWith("_AddRefreshTokenFamilies", StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
         var assembly = context.GetService<IMigrationsAssembly>();
@@ -43,7 +44,7 @@ public sealed class VersionedMigrationsTests
         var upgrade = migrator.GenerateScript("0", migration, MigrationsSqlGenerationOptions.Idempotent);
         var rollback = migrator.GenerateScript(migration, "0");
 
-        foreach (var table in new[] { "Products", "AspNetUsers", "AspNetRoles", "RefreshTokens", "ExternalRoleGrants" })
+        foreach (var table in new[] { "Products", "AspNetUsers", "AspNetRoles", "RefreshTokens", "ExternalRoleGrants", "RefreshTokenFamilies" })
         {
             Assert.Contains(table, create);
             Assert.Contains(table, rollback);

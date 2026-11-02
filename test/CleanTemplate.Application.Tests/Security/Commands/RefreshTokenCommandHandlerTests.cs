@@ -101,6 +101,7 @@ public sealed class RefreshTokenCommandHandlerTests
         Assert.True(result.IsFailure);
         Assert.False(refresh.RotationCalled);
         Assert.Contains(result.Errors, error => error.Code == (locked ? "Auth.LockedOut" : "Users.NotFound"));
+        Assert.Equal(userId, refresh.RevokedUserId);
     }
 
     [Fact]
@@ -167,6 +168,12 @@ public sealed class RefreshTokenCommandHandlerTests
 
     private sealed class FakeRefreshTokenService : IRefreshTokenService
     {
+        public Guid? RevokedUserId { get; private set; }
+        public Task RevokeAllForUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            RevokedUserId = userId;
+            return Task.CompletedTask;
+        }
         public RefreshTokenConsumptionResult? ConsumeResult { get; set; }
         public bool RejectRotation { get; set; }
         public bool RotationCalled { get; private set; }

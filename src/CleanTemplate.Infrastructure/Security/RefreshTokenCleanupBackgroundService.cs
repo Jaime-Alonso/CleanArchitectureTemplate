@@ -1,5 +1,4 @@
 using CleanTemplate.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -56,16 +55,13 @@ public sealed class RefreshTokenCleanupBackgroundService : BackgroundService
             var retentionDays = Math.Clamp(_options.RevokedRetentionDays, 0, 365);
             var revokedThreshold = nowUtc.AddDays(-retentionDays);
 
-            var deletedRows = await dbContext.Set<RefreshToken>()
-                .Where(token => token.ExpiresAtUtc <= nowUtc
-                    || (token.RevokedAtUtc.HasValue && token.RevokedAtUtc <= revokedThreshold))
-                .ExecuteDeleteAsync(cancellationToken)
-                .ConfigureAwait(false);
+            var deletedRows = await new RefreshTokenCleanupService(dbContext)
+                .CleanupAsync(nowUtc, revokedThreshold, cancellationToken).ConfigureAwait(false);
 
             if (deletedRows > 0)
             {
                 _logger.LogInformation(
-                    "Refresh token cleanup removed {DeletedRows} tokens.",
+                    "Refresh token cleanup removed {DeletedRows} families or legacy token rows.",
                     deletedRows);
             }
         }

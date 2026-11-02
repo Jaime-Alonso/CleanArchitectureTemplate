@@ -303,7 +303,7 @@ A policy scheme named `Bearer` selects the concrete scheme automatically based o
 
 Only enabled schemes are registered. A token for a disabled scheme or a malformed token receives a Bearer `401` challenge; disabling a scheme never relaxes token validation. If `LocalJwt` is disabled, `/auth/login`, `/auth/refresh`, and `/auth/logout` are not mapped, and the local token generator rejects direct issuance. Disabling both schemes is an invalid configuration and fails startup validation. Changes to scheme enablement require an application restart.
 
-OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and expiration are still validated; reading the untrusted `iss` claim only chooses the validator. Account ownership, role revocation and transactional provisioning are implemented with the documented bounds. Atomic refresh rotation (T-06) is validated on SQLite, SQL Server and PostgreSQL; session families (T-07) and other production-readiness tasks remain pending. The entire identity subsystem is not yet production-ready.
+OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and expiration are still validated; reading the untrusted `iss` claim only chooses the validator. Account ownership, role revocation, transactional provisioning and refresh session families are implemented with documented bounds. Rotation/families (T-06/T-07) are validated on SQLite, SQL Server and PostgreSQL; other production-readiness tasks remain pending. The entire identity subsystem is not yet production-ready.
 
 ### Decisions taken
 
@@ -386,12 +386,14 @@ The template intentionally ships with a placeholder password value in `appsettin
 - **Refresh token flow (rotation on use)**
   - `POST /auth/login` returns both `accessToken` and `refreshToken`.
   - `POST /auth/refresh` consumes a refresh token and issues a new access/refresh pair.
-  - `POST /auth/logout` explicitly revokes the current refresh token and always responds `204 No Content` to avoid token-enumeration signals.
-  - Refresh tokens are persisted hashed. Rotation conditionally consumes the original and inserts its replacement in one transaction; concurrent losers receive no new token pair. T-06 concurrency/rollback tests pass on SQL Server and PostgreSQL with real migrations. Run `pwsh -NoProfile -File scripts/tests/Test-RefreshTokenRotation.ps1` with Docker to reproduce. See [atomic rotation and validation limits](docs/security/refresh-token-rotation.md). Session families/replay revocation (T-07) remain pending.
+  - `POST /auth/logout` revokes the presented token's entire session family (including when presenting a consumed ancestor) and always responds `204 No Content` to avoid token-enumeration signals.
+  - Refresh tokens are persisted hashed. Rotation conditionally consumes the original and inserts its replacement in one transaction; concurrent losers receive no new token pair and strict reuse detection revokes the whole family, including a concurrent winner's replacement. Clients must serialize refreshes. Rotation/family tests pass on SQL Server and PostgreSQL with real migrations. Run `pwsh -NoProfile -File scripts/tests/Test-RefreshTokenRotation.ps1` with Docker to reproduce. See [atomic rotation](docs/security/refresh-token-rotation.md) and [session policy/rollout](docs/security/refresh-session-families.md).
+  - `AbsoluteSessionDays` (default 30, range 1–90) caps session duration independently of per-token `RefreshTokenDays`. Security-stamp changes deny further rotation; missing/locked users trigger revocation of existing families. Administrative withdrawal workflows must call `RevokeAllForUserAsync`. Already-issued access tokens are not immediately session-revoked.
+  - **Upgrade:** apply the new provider migration and drain old binaries. Legacy refresh tokens without families require a new login; do not deploy mixed versions or guess family backfills.
 
 - **Automatic refresh token cleanup**
-  - A background service periodically removes expired refresh tokens.
-  - Revoked tokens are retained for a configurable window before cleanup.
+  - A background service removes expired/revoked families and cascades their tokens. Consumed/expired ancestors of active families are retained for replay detection; legacy tokens without families are cleaned separately.
+  - Revoked families are retained for a configurable window, bounded by their absolute expiration.
   - Configuration: `Auth:RefreshTokenCleanup` (`Enabled`, `IntervalMinutes`, `RevokedRetentionDays`).
 
 - **Stronger password + lockout policy**

@@ -2,6 +2,8 @@ using CleanTemplate.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -14,7 +16,11 @@ internal sealed class RefreshTokenDatabaseFixture(
     public ServiceProvider First => first;
     public ServiceProvider Second => second;
 
-    public static async Task<RefreshTokenDatabaseFixture> CreateAsync(params IInterceptor[] interceptors)
+    public static Task<RefreshTokenDatabaseFixture> CreateAsync(params IInterceptor[] interceptors) => CreateCoreAsync(false, interceptors);
+
+    public static Task<RefreshTokenDatabaseFixture> CreateLegacySchemaAsync() => CreateCoreAsync(true, []);
+
+    private static async Task<RefreshTokenDatabaseFixture> CreateCoreAsync(bool legacySchema, IInterceptor[] interceptors)
     {
         var provider = Environment.GetEnvironmentVariable("REFRESH_ROTATION_TEST_PROVIDER") ?? "Sqlite";
         var databaseName = $"refresh_rotation_{Guid.NewGuid():N}";
@@ -70,6 +76,9 @@ internal sealed class RefreshTokenDatabaseFixture(
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             if (provider == "Sqlite")
                 await db.Database.EnsureCreatedAsync();
+            else if (legacySchema)
+                await db.GetService<IMigrator>().MigrateAsync(db.Database.GetMigrations()
+                    .Single(name => name.EndsWith("_EnforceUniqueIdentityEmail", StringComparison.Ordinal)));
             else
                 await db.Database.MigrateAsync();
             return fixture;
