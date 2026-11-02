@@ -73,14 +73,23 @@ try
 
     app.Run();
 }
+catch (HostAbortedException)
+{
+    // WebApplicationFactory uses this exception to stop the entry point after building the host.
+    throw;
+}
 catch (Exception ex)
 {
-    Log.Fatal(ex, "Application terminated unexpectedly");
+    // Exception messages can contain configuration values, including secrets.
+    Log.Fatal("Application terminated unexpectedly ({ExceptionType}). Check the startup configuration and dependencies", ex.GetType().Name);
+    return 1;
 }
 finally
 {
     Log.CloseAndFlush();
 }
+
+return 0;
 
 public partial class Program
 {
