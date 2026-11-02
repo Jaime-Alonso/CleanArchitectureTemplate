@@ -60,6 +60,7 @@ try
     builder.Services.AddOpenTelemetryObservability(builder.Configuration, builder.Environment);
     builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>();
 
+    builder.Services.ValidateRequestValidationConfiguration();
     var app = builder.Build();
 
     await app.Services.InitializeIdentityAsync(app.Lifetime.ApplicationStopping);

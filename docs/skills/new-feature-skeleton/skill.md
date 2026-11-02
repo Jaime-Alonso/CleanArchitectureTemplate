@@ -23,6 +23,7 @@ This skill is intentionally opinionated: it prioritizes practical consistency ov
   - `CleanTemplate.Api.Endpoints.Contracts`
 - One public type per file.
 - Use `Result` / `Result<T>` for expected business outcomes.
+- Requests with validators must return exactly `Result` or `Result<T>`. After the final validator registration call `ValidateRequestValidationConfiguration()` before building the provider; validators run sequentially and can share scoped dependencies.
 - Use async handlers with `CancellationToken`.
 - Follow ADR-0001: Application uses specific repository/query contracts; EF Core and Dapper stay in Infrastructure.
 

@@ -245,6 +245,7 @@ public async Task<Result<User>> GetUserAsync(
 - DTOs for application flow
 - Interface definitions for Infrastructure to implement
 - Validation logic
+- Validated mediator requests must return exactly `Result` or `Result<T>`. Validators run sequentially and may share scoped dependencies. After the final validator registration call `ValidateRequestValidationConfiguration()` before building the provider; see README for scope and limitations.
 
 ### Infrastructure
 
