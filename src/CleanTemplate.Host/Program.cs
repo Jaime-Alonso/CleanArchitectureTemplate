@@ -48,7 +48,7 @@ try
         config.ReadFrom.Configuration(context.Configuration));
 
     var apiVersioningBuilder = builder.Services.AddApiVersioningConfiguration();
-    builder.Services.AddScalarDocumentation(apiVersioningBuilder);
+    builder.Services.AddApiContract(apiVersioningBuilder);
     builder.Services.AddGlobalErrorHandling();
 
     builder.Services.AddApplication();

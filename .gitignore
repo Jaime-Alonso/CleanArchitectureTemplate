@@ -363,3 +363,5 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /ANALISIS_ARQUITECTURA_Y_PLAN_DE_MEJORA.md
+# Local generated client smoke artifacts and tools
+/work/

@@ -50,6 +50,136 @@ public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassF
     }
 
     [Fact]
+    public async Task OpenApi_CuratedProductAndProblemContract()
+    {
+        using var client = factory.CreateClient();
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var root = document!.RootElement;
+        var schemas = root.GetProperty("components").GetProperty("schemas");
+
+        static void Required(JsonElement schema, params string[] names)
+        {
+            var required = schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray();
+            foreach (var name in names) Assert.Contains(name, required);
+        }
+
+        static void Property(JsonElement schema, string name, string type, string? format = null)
+        {
+            var property = schema.GetProperty("properties").GetProperty(name);
+            Assert.Equal(type, property.GetProperty("type").GetString());
+            if (format is not null) Assert.Equal(format, property.GetProperty("format").GetString());
+        }
+
+        foreach (var schemaName in new[] { "CreateProductRequest", "UpdateProductRequest", "ProductDto", "ProductListItemDto" })
+        {
+            var schema = schemas.GetProperty(schemaName);
+            var properties = schema.GetProperty("properties");
+            Property(schema, "price", "number", "decimal");
+            Assert.Equal(0m, properties.GetProperty("price").GetProperty("minimum").GetDecimal());
+            Assert.Equal(9999999999999999.99m, properties.GetProperty("price").GetProperty("maximum").GetDecimal());
+            Assert.Equal(0.01m, properties.GetProperty("price").GetProperty("multipleOf").GetDecimal());
+            Assert.Equal(200, properties.GetProperty("name").GetProperty("maxLength").GetInt32());
+            Assert.Equal(1, properties.GetProperty("name").GetProperty("minLength").GetInt32());
+            Assert.Equal(0, properties.GetProperty("stock").GetProperty("minimum").GetInt32());
+            if (properties.TryGetProperty("description", out var description))
+            {
+                Assert.Equal(1000, description.GetProperty("maxLength").GetInt32());
+                var types = description.GetProperty("type").EnumerateArray().Select(value => value.GetString());
+                Assert.Contains("string", types);
+                Assert.Contains("null", types);
+            }
+            if (schemaName.EndsWith("Dto", StringComparison.Ordinal))
+            {
+                Required(schema, "id", "version", "price");
+                Property(schema, "id", "string", "uuid");
+                Property(schema, "version", "integer", "int64");
+                Assert.Equal(1, properties.GetProperty("version").GetProperty("minimum").GetInt32());
+            }
+        }
+        var update = schemas.GetProperty("UpdateProductRequest");
+        Required(update, "expectedVersion", "name");
+        Property(update, "expectedVersion", "integer", "int64");
+        Assert.Equal(1, update.GetProperty("properties").GetProperty("expectedVersion").GetProperty("minimum").GetInt32());
+        foreach (var name in new[] { "CreateProductRequest", "UpdateProductRequest" })
+        {
+            var required = schemas.GetProperty(name).GetProperty("required").EnumerateArray().Select(value => value.GetString());
+            Assert.DoesNotContain("price", required);
+            Assert.DoesNotContain("stock", required);
+        }
+        var created = schemas.GetProperty("CreateProductResponse");
+        Required(created, "id");
+        Property(created, "id", "string", "uuid");
+        foreach (var name in new[] { "ProblemDetails", "HttpValidationProblemDetails" })
+        {
+            var schema = schemas.GetProperty(name);
+            Required(schema, "code", "traceId");
+            Property(schema, "code", "string");
+            Property(schema, "traceId", "string");
+            if (name == "HttpValidationProblemDetails")
+            {
+                Required(schema, "errors");
+                Property(schema, "errors", "object");
+                var values = schema.GetProperty("properties").GetProperty("errors").GetProperty("additionalProperties");
+                Assert.Equal("array", values.GetProperty("type").GetString());
+                Assert.Equal("string", values.GetProperty("items").GetProperty("type").GetString());
+            }
+        }
+        var paths = root.GetProperty("paths");
+        var delete = paths.GetProperty("/api/products/{id}").GetProperty("delete");
+        var expectedVersion = delete.GetProperty("parameters").EnumerateArray().Single(p => p.GetProperty("name").GetString() == "expectedVersion");
+        Assert.True(expectedVersion.GetProperty("required").GetBoolean());
+        var parameterSchema = expectedVersion.GetProperty("schema");
+        Assert.Equal("integer", parameterSchema.GetProperty("type").GetString());
+        Assert.Equal("int64", parameterSchema.GetProperty("format").GetString());
+        Assert.Equal(1, parameterSchema.GetProperty("minimum").GetInt32());
+        var badRequest = delete.GetProperty("responses").GetProperty("400").GetProperty("content").GetProperty("application/problem+json").GetProperty("schema");
+        var alternatives = badRequest.GetProperty("anyOf").EnumerateArray().ToArray();
+        Assert.Contains(alternatives, alternative => alternative.GetProperty("properties").TryGetProperty("errors", out _));
+        Assert.Contains(alternatives, alternative => !alternative.GetProperty("properties").TryGetProperty("errors", out _));
+    }
+
+    [Fact]
+    public async Task OpenApi_DeclaresSuccessAndConcurrencyResponses()
+    {
+        using var client = factory.CreateClient();
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var bearer = document!.RootElement.GetProperty("components").GetProperty("securitySchemes").GetProperty("Bearer");
+        Assert.Equal("http", bearer.GetProperty("type").GetString());
+        Assert.Equal("bearer", bearer.GetProperty("scheme").GetString());
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        foreach (var schemaName in new[] { "ProblemDetails", "HttpValidationProblemDetails" })
+        {
+            var properties = schemas.GetProperty(schemaName).GetProperty("properties");
+            Assert.Equal("string", properties.GetProperty("code").GetProperty("type").GetString());
+            Assert.Equal("string", properties.GetProperty("traceId").GetProperty("type").GetString());
+            if (schemaName == "HttpValidationProblemDetails") Assert.True(properties.TryGetProperty("errors", out _));
+        }
+        var paths = document!.RootElement.GetProperty("paths");
+        foreach (var (path, method, status) in new[]
+        {
+            ("/auth/login", "post", "200"), ("/auth/refresh", "post", "200"),
+            ("/auth/logout", "post", "204"), ("/api/products", "post", "201"),
+            ("/api/products", "get", "200"), ("/api/products/{id}", "get", "200"),
+            ("/api/products/{id}", "put", "204"), ("/api/products/{id}", "delete", "204")
+        })
+        {
+            var operation = paths.GetProperty(path).GetProperty(method);
+            if (path.StartsWith("/api/products", StringComparison.Ordinal))
+                Assert.Contains(operation.GetProperty("security").EnumerateArray(), s => s.TryGetProperty("Bearer", out _));
+            else
+                Assert.False(operation.TryGetProperty("security", out _));
+            var responses = operation.GetProperty("responses");
+            Assert.True(responses.GetProperty("429").GetProperty("headers").TryGetProperty("Retry-After", out _));
+            if (responses.TryGetProperty("401", out var unauthorized))
+                Assert.True(unauthorized.GetProperty("headers").TryGetProperty("WWW-Authenticate", out _));
+            var success = responses.GetProperty(status);
+            if (status == "204") Assert.False(success.TryGetProperty("content", out _));
+            else Assert.True(success.GetProperty("content").GetProperty("application/json").TryGetProperty("schema", out _));
+            if (method is "put" or "delete") Assert.True(responses.TryGetProperty("409", out _));
+        }
+    }
+
+    [Fact]
     public async Task OpenApi_ContainsVersionedBusinessOperationsAndHeader()
     {
         using var client = factory.CreateClient();

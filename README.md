@@ -32,6 +32,23 @@ Other 4xx responses use `request.error`. Authentication challenges and forbids r
 
 Product operations and, when local JWT is enabled, `/auth/login`, `/auth/refresh` and `/auth/logout` explicitly belong to API version **1.0**. Existing paths are unchanged. Select it with `X-Api-Version: 1.0`; an absent header defaults to 1.0 for compatibility. An unsupported, malformed or ambiguous version returns 400 as `application/problem+json` with `code` and `traceId`, regardless of `Accept`. Multiple distinct values are ambiguous. Version selection happens at routing: a rejected version can precede authentication/authorization and endpoint-specific rate limiting; clients must not rely on a 401 or 429 for such requests. Health, OpenAPI and Scalar routes are technical and version-neutral. OpenAPI `info.version` names the document, not proof of operation membership; the v1 document lists each business operation with its actual header parameter.
 
+The Development OpenAPI document includes the HTTP Bearer scheme for authorized operations and documents 429 responses, including the optional `Retry-After` header. A 400 can be ordinary ProblemDetails (including version errors) or validation ProblemDetails with `errors`; the document uses `anyOf` because these shapes overlap. Product limits are described in the contract; string length limits are measured by the server in UTF-16 code units, whereas JSON Schema implementations may count Unicode characters differently. The document and Scalar UI are not mapped in Production. A generated-client smoke is described below.
+
+### Generated client smoke
+
+With .NET 10, PowerShell 7, and NuGet access, install the pinned tool locally and run:
+
+```powershell
+dotnet tool install NSwag.ConsoleCore --version 14.7.1 --tool-path work/tools
+pwsh -NoProfile -File scripts/tests/Test-OpenApiClient.ps1
+```
+
+The script builds and starts a separate Development host, generates a C# client from its unmodified `/openapi/v1.json`, builds it and runs login and product create/read/update/delete/404 using Bearer and `X-Api-Version: 1.0`. It checks generated decimal prices and Int64 versions. It uses random environment-only secrets and a uniquely named in-memory SQLite database; the host process is stopped in `finally`. Generated files and the tool are ignored under `work/`. Each run has its own artifact directory. The local port is chosen dynamically. No global tool is installed.
+
+Verified with NSwag 14.7.1 (NJsonSchema 11.6.1), .NET 10 and the emitted OpenAPI **3.1.1**: generation, build and all smoke calls passed. No 3.0 downgrade or document postprocessing was needed for this limited flow. This does not validate every schema constraint, error response, generator, or client use case. On this environment `--allow-roll-forward` produced an invalid NSwag runtime configuration; it is not needed when the .NET 10 runtime is installed.
+
+The smoke runs a child host with primary reads, in-memory caching and OIDC disabled; it clears inherited read-replica and legacy read connections in that child. It exercises high-precision decimal values and a stale-version 409 without printing credentials.
+
 Only 1.0 is currently supported and none is deprecated. When introducing a breaking contract, explicitly map each operation to its supported versions and publish matching documents; do not silently move the default. Announce deprecation and migration guidance before marking a version deprecated, report it with `api-deprecated-versions`, and remove it only after an explicitly communicated retirement decision. No retirement date or support duration is promised here. Removing 1.0 or changing the absent-header default is a breaking change requiring a compatibility decision. `api-supported-versions` reports supported versions on matched business responses.
 
 ## Before You Start

@@ -1,5 +1,7 @@
 # Skill: New Feature Skeleton (Opinionated)
 
+For every endpoint, describe actual HTTP success/error responses, security, required fields and shared limits in OpenAPI without transport annotations on Application. Extend curated contract tests and exercise the generated-client smoke when the contract changes; keep document/UI mappings Development-only.
+
 Canonical OpenCode file: `.opencode/skills/new-feature-skeleton/SKILL.md`
 
 ## Purpose

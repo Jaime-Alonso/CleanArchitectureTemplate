@@ -29,17 +29,22 @@ public static class AuthEndpoints
         group.MapPost("/login", Login)
             .AllowAnonymous()
             .RequireRateLimiting(AuthRateLimitPolicies.Login)
-            .WithName("Login");
+            .WithName("Login")
+            .Produces<LoginResponse>().ProducesValidationProblem().ProducesProblem(401)
+            .ProducesProblem(429).ProducesProblem(500);
 
         group.MapPost("/refresh", Refresh)
             .AllowAnonymous()
             .RequireRateLimiting(AuthRateLimitPolicies.Refresh)
-            .WithName("RefreshToken");
+            .WithName("RefreshToken")
+            .Produces<LoginResponse>().ProducesValidationProblem().ProducesProblem(401)
+            .ProducesProblem(429).ProducesProblem(500);
 
         group.MapPost("/logout", Logout)
             .AllowAnonymous()
             .RequireRateLimiting(AuthRateLimitPolicies.Logout)
-            .WithName("Logout");
+            .WithName("Logout")
+            .Produces(204).ProducesValidationProblem().ProducesProblem(429).ProducesProblem(500);
 
         return app;
     }

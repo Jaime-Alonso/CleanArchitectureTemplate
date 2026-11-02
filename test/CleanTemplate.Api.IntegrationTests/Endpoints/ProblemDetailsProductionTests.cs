@@ -27,6 +27,18 @@ public sealed class ProblemDetailsProductionTests
     private const string Secret = "sensitive-injected-secret";
 
     [Theory]
+    [InlineData("/openapi/v1.json")]
+    [InlineData("/scalar/v1")]
+    public async Task Documentation_IsNotMappedInProduction(string path)
+    {
+        using var settings = new EnvironmentSettings();
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("text/plain")]
     [InlineData("text/html")]
     public async Task ErrorsIgnoreAcceptAndUnauthorizedResponsesIncludeBearer(string accept)

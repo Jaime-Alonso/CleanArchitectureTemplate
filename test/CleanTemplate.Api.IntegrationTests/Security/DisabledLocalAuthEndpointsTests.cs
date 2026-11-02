@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using CleanTemplate.Api.IntegrationTests.Infrastructure;
 using Microsoft.Extensions.Configuration;
 
@@ -34,5 +35,10 @@ public sealed class DisabledLocalAuthEndpointsTests
 
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         }
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var paths = document!.RootElement.GetProperty("paths");
+        Assert.False(paths.TryGetProperty("/auth/login", out _));
+        Assert.False(paths.TryGetProperty("/auth/refresh", out _));
+        Assert.False(paths.TryGetProperty("/auth/logout", out _));
     }
 }

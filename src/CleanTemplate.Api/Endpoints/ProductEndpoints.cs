@@ -2,6 +2,9 @@ using Asp.Versioning;
 using CleanTemplate.Api.Endpoints.Contracts.Products;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Application.Common.Criteria;
+using CleanTemplate.Application.Common.Pagination;
+using CleanTemplate.Application.Products.Queries.GetProductById;
+using CleanTemplate.Application.Products.Queries.GetProducts;
 using CleanTemplate.Application.Products.ReadModels;
 using Mediora;
 using Microsoft.AspNetCore.Builder;
@@ -19,21 +22,31 @@ public static class ProductEndpoints
 
         group.MapPost("/", CreateProduct)
             .RequireAuthorization("AdminOnly")
-            .WithName("CreateProduct");
+            .WithName("CreateProduct")
+            .Produces<CreateProductResponse>(StatusCodes.Status201Created)
+            .ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403).ProducesProblem(500);
 
         group.MapPut("/{id:guid}", UpdateProduct)
             .RequireAuthorization("AdminOnly")
-            .WithName("UpdateProduct");
+            .WithName("UpdateProduct")
+            .Produces(204).ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403)
+            .ProducesProblem(404).ProducesProblem(409).ProducesProblem(500);
 
         group.MapDelete("/{id:guid}", DeleteProduct)
             .RequireAuthorization("AdminOnly")
-            .WithName("DeleteProduct");
+            .WithName("DeleteProduct")
+            .Produces(204).ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403)
+            .ProducesProblem(404).ProducesProblem(409).ProducesProblem(500);
 
         group.MapGet("/{id:guid}", GetProductById)
-            .WithName("GetProductById");
+            .WithName("GetProductById")
+            .Produces<ProductDto>().ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403)
+            .ProducesProblem(404).ProducesProblem(500);
 
         group.MapGet("/", GetProducts)
-            .WithName("GetProducts");
+            .WithName("GetProducts")
+            .Produces<PagedResult<ProductListItemDto>>().ProducesValidationProblem().ProducesProblem(401)
+            .ProducesProblem(403).ProducesProblem(500);
 
         return app;
     }
@@ -58,7 +71,7 @@ public static class ProductEndpoints
             return productId.ToHttpErrorResult();
         }
 
-        return Results.Created($"/api/products/{productId.Value}", new { Id = productId.Value });
+        return Results.Created($"/api/products/{productId.Value}", new CreateProductResponse(productId.Value));
     }
 
     private static async Task<IResult> UpdateProduct(

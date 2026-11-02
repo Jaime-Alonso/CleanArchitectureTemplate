@@ -260,6 +260,7 @@ public async Task<Result<User>> GetUserAsync(
 - Middleware and authentication
 - Maps HTTP to Application layer
 - Assign every business operation explicitly to its API version set; currently v1.0 and header `X-Api-Version` (absent defaults to 1.0). Keep technical routes version-neutral. Test actual routing, metadata and OpenAPI header/operation membership; a document version alone is not evidence. Follow the deprecation and compatibility policy in README.
+- Keep OpenAPI contract registration separate from the Development-only document and UI mappings. Document actual status codes, authorization, required fields and shared limits without adding transport attributes to Application. Keep the curated contract tests and generated-client smoke working; validation and version 400 responses overlap and must not use `oneOf`.
 
 ---
 
