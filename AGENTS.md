@@ -78,13 +78,22 @@ This is a **Clean Architecture** solution using **Minimal APIs** with the follow
 2. Domain       → Depends on SharedKernel only
 3. Application  → Depends on Domain + SharedKernel
 4. Infrastructure → Depends on Application
-5. Api          → Depends on Application + Infrastructure
-6. Host         → Entry point, depends on Api
+5. Api          → Depends on Application + SharedKernel (not Infrastructure)
+6. Host         → Composition root: Api + Infrastructure + Crosscutting + provider migrations
 ```
 
 ### Dependency Rule
 
 **Dependencies must always point inward toward the core.** Never reference outer layers from inner layers.
+
+Crosscutting contains outer-layer hosting utilities, not pure core primitives. Provider migration projects depend on Infrastructure. The direct dependency matrix is documented in `docs/adr/0001-data-access-and-dependencies.md` and checked by `test/CleanTemplate.ArchitectureTests`.
+
+### Data Access Decision (ADR-0001)
+
+- Application uses specific write repositories and read-query contracts, never DbContext, IQueryable, EF Core or Dapper.
+- Infrastructure implements EF Core writes and Dapper reads; Dapper remains in the current base profile.
+- Do not recreate the removed generic context contract or Application DbContext extension methods.
+- Unit-of-work extraction (T-13) and read consistency (T-14) remain pending; do not claim cross-repository atomicity.
 
 ---
 

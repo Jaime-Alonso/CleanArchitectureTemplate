@@ -19,7 +19,7 @@ manual assignments ∪ unexpired grants from currently linked external logins
 
 The union is account-wide, including when more than one external login has been deliberately linked. A role remains effective if any independent source still grants it. Removing one source is not a global deny. Automatic linking remains prohibited; no linking API is introduced by this work.
 
-External synchronization never calls `AddToRoleAsync` or `RemoveFromRoleAsync`. It replaces only its own grants: removes obsolete roles, adds new ones and updates expiration. Removals/additions/renewals are saved together by one relational EF `SaveChangesAsync` transaction. This does **not** make user creation, linking and profile updates one transaction: first-access concurrency and partial provisioning remain T-08.
+External synchronization never calls `AddToRoleAsync` or `RemoveFromRoleAsync`. It replaces only its own grants: removes obsolete roles, adds new ones and updates expiration. T-08 now wraps user creation, linking, profile changes and grant replacement in an isolated serializable transaction with bounded whole-unit retries. See [transactional provisioning](transactional-external-provisioning.md) for schema prerequisites and the remaining production-provider validation; this is not a generic cross-repository unit of work.
 
 Manual and external ownership may overlap safely. A manual Admin assignment is preserved when an external Admin grant is removed. Conversely, removing manual Admin does not erase an independently valid external Admin grant.
 
@@ -80,4 +80,4 @@ Expiry revokes permissions without deleting stored rows. Physical cleanup of exp
 - Relational Identity tests cover external demotion, overlapping manual roles, independent login sources, expiration boundaries with a controlled clock, token-expiration caps, unlinking, lockout, deleted users, disabled provisioning, invalid mappings and rollback on grant-persistence failure.
 - HTTP policy tests use an unchanged signed local Admin token before/after a permission change, proving there is no fallback to stale token roles.
 - The composed HTTP integration uses the real product endpoints, handlers, Identity stores, synchronizer and permission reader with SQLite and signed external JWTs/static metadata. External demotion removes write access from an already issued local token and its refresh emits no obsolete Admin role; manual grants survive synchronization and explicit manual removal is reflected in both flows.
-- These tests do not replace real-provider revocation tests, production-engine integration, first-access concurrency tests (T-08), or the session work (T-06/T-07).
+- T-08 adds relational first-access concurrency and rollback tests. These tests do not replace real-provider revocation tests, production-engine integration or the session work (T-06/T-07).

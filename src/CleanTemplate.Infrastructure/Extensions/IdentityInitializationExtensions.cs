@@ -1,6 +1,6 @@
 using CleanTemplate.Infrastructure.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace CleanTemplate.Infrastructure.Extensions;
 
@@ -11,15 +11,10 @@ public static class IdentityInitializationExtensions
         using var scope = services.CreateScope();
 
         var dbContext = scope.ServiceProvider.GetRequiredService<Persistence.ApplicationDbContext>();
-        var hasMigrations = dbContext.Database.GetMigrations().Any();
-        if (hasMigrations)
-        {
-            await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            await dbContext.Database.EnsureCreatedAsync(cancellationToken).ConfigureAwait(false);
-        }
+        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        await dbContext.InitializeDatabaseAsync(
+            environment.IsDevelopment() || environment.IsEnvironment("Testing"),
+            cancellationToken).ConfigureAwait(false);
 
         var seeder = scope.ServiceProvider.GetRequiredService<IdentityDataSeeder>();
         await seeder.SeedAsync(cancellationToken).ConfigureAwait(false);

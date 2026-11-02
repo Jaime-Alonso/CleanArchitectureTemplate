@@ -62,17 +62,21 @@ dotnet test .\MyAppArchitecture.slnx
 
 The generated solution includes the following projects:
 
-- `MyApp.Core` _(contains `Core/SharedKernel` primitives and `Core/CrossCutting` technical concerns)_
+- `MyApp.SharedKernel` _(pure primitives)_
+- `MyApp.Crosscutting` _(outer-layer hosting concerns, not part of the core)_
 - `MyApp.Domain`
 - `MyApp.Application`
 - `MyApp.Infrastructure`
 - `MyApp.Api`
 - `MyApp.Host`
+- `MyApp.Migrations.SqlServer` / `MyApp.Migrations.PostgreSql`
 
 And one or more test projects, for example:
 
 - `MyApp.Domain.Tests`
 - `MyApp.Application.Tests`
+- `MyApp.Infrastructure.Tests`
+- `MyApp.ArchitectureTests`
 - `MyApp.Api.IntegrationTests`
 
 ---
@@ -81,13 +85,14 @@ And one or more test projects, for example:
 
 In Visual Studio, **Solution Folders** (organizational only, not physical folders) are created in this order:
 
-1. **Core**
-2. **Domain**
-3. **Application**
-4. **Infrastructure**
-5. **Api**
-6. **Host**
-7. **Tests**
+1. **Shared Kernel**
+2. **Crosscutting** (hosting utilities; not an inner layer)
+3. **Domain**
+4. **Application**
+5. **Infrastructure** (including provider migration projects)
+6. **Api**
+7. **Host**
+8. **Tests**
 
 ### Why this enumeration?
 
@@ -95,8 +100,8 @@ The order reflects the **dependency rule of Clean Architecture**:
 
 > Dependencies must always point inward, toward the core.
 
-- **Core** is the innermost shared base and includes two internal areas: `Core/SharedKernel` (pure primitives like `Result`, `Error`, `Guard`, base `Entity`, `ValueObject`) and `Core/CrossCutting` (technical runtime concerns like observability, networking, and rate limiting).
-- **Domain** contains business rules and invariants and should only consume `Core.SharedKernel` primitives, never outer layers.
+- **SharedKernel** is the innermost shared base with pure primitives such as `Result`, `Error` and `Guard`. **Crosscutting** is a separate technical hosting project, not a domain dependency.
+- **Domain** contains business rules and invariants and should only consume `SharedKernel` primitives, never outer layers.
 
 - **Application** implements use cases (Mediora handlers), orchestrates domain logic, and defines contracts (interfaces) to be implemented by infrastructure.  
   It depends on `Domain`.
@@ -107,7 +112,7 @@ The order reflects the **dependency rule of Clean Architecture**:
 - **Api** contains the HTTP contract and endpoint surface (Minimal API endpoint mapping and request/response contracts).  
   It depends on `Application`.
 
-- **Host** is the executable entry point that composes `Api`, `Infrastructure`, and `Core` runtime concerns.
+- **Host** is the executable entry point that composes `Api`, `Infrastructure`, `Crosscutting`, and provider migration assemblies.
 - **Tests** are placed last to clearly separate production code from verification concerns.
 
 Visually, this ordering reinforces the architectural message:  
@@ -117,13 +122,17 @@ Visually, this ordering reinforces the architectural message:
 
 ## Dependency Overview
 
-- `Core` → shared base project with `SharedKernel` + `CrossCutting` modules
-- `Domain` → depends on `Core` (consuming `Core.SharedKernel` primitives)
-- `Application` → depends on `Domain`
-- `Infrastructure` → depends on `Application` (and possibly `Domain`)
-- `Api` → depends on `Application`
-- `Host` → depends on `Api` + `Infrastructure` + `Core`
+- `SharedKernel` → no project, package or framework dependencies
+- `Domain` → `SharedKernel`
+- `Application` → `Domain` + `SharedKernel`; no EF Core or Dapper
+- `Infrastructure` → `Application`
+- `Api` → `Application` + `SharedKernel`; no Infrastructure reference
+- `Crosscutting` → no project dependencies; technical hosting packages/frameworks
+- `Migrations.SqlServer` / `Migrations.PostgreSql` → `Infrastructure`
+- `Host` → `Api` + `Infrastructure` + `Crosscutting` + provider migration projects
 - `Tests` → depend on the projects they test
+
+The declared dependency matrix and essential build conventions are checked by `CleanTemplate.ArchitectureTests`, including conditional and unused project references. Run it with `dotnet test test/CleanTemplate.ArchitectureTests/CleanTemplate.ArchitectureTests.csproj`. See [ADR-0001](docs/adr/0001-data-access-and-dependencies.md) for the decision and verification limits.
 
 ## Requirements
 
@@ -136,13 +145,14 @@ Visually, this ordering reinforces the architectural message:
 
 The solution folders are intentionally ordered to reflect **Clean Architecture dependency rules**:
 
-1. Core
-2. Domain
-3. Application
-4. Infrastructure
-5. Api
-6. Host
-7. Tests
+1. Shared Kernel
+2. Crosscutting (outer hosting utilities)
+3. Domain
+4. Application
+5. Infrastructure
+6. Api
+7. Host
+8. Tests
 
 This order emphasizes that:
 
@@ -156,7 +166,7 @@ The structure communicates architecture clearly and reinforces proper layering.
 
 ### Core SharedKernel Usage
 
-`Core/SharedKernel` hosts **pure, reusable primitives** shared by inner layers.
+`CleanTemplate.SharedKernel` hosts **pure, reusable primitives** shared by inner layers.
 
 Typical contents:
 
@@ -228,9 +238,9 @@ It depends on Application but should not introduce business logic.
 
 ---
 
-### Core CrossCutting Module
+### Crosscutting Hosting Project
 
-The `Core/CrossCutting` module contains reusable **technical** concerns for outer layers, such as:
+The separate `CleanTemplate.Crosscutting` project contains reusable **technical** concerns for outer layers, such as:
 
 - OpenTelemetry registration
 - Rate limiting policies and options
@@ -247,59 +257,23 @@ Rules:
 
 ---
 
-### Decision: No repository layer over EF Core
+### Decision: Specific repositories and read queries
 
-DbContext is already a Unit of Work. DbSet<T> is already a Repository. Wrapping EF Core behind another repository layer usually adds abstraction over abstraction without real gain.
+[ADR-0001](docs/adr/0001-data-access-and-dependencies.md) defines the single data-access model used by the code and feature-generation instructions:
 
-Arguments that do not hold well:
+- Application defines specific contracts: `IProductWriteRepository` for aggregate changes and `IProductReadRepository` for projected queries.
+- Infrastructure implements writes with EF Core and reads with Dapper. Dapper remains in the current base profile, not an optional generator switch.
+- Application does not reference EF Core, Dapper, `DbContext` or `IQueryable`. The unused generic context abstraction has been removed.
+- Handlers await contract methods with cancellation; tests use repository doubles. Persistence adapters require relational tests.
 
-- "To be able to change ORM" - In practice this almost never happens. And if it does, a generic repository does not save you because EF Core behavior leaks everywhere: lazy loading, change tracker, Include(), AsNoTracking(), transactions. The repository pretends to hide EF Core while it actually assumes it all over the place.
-- "To test without a database" - EF Core already provides UseInMemoryDatabase and SQLite in test mode. You do not need the pattern for this.
-- "To comply with Clean Architecture" - Clean Architecture asks Infrastructure not to contaminate Application, not that EF Core must disappear behind five layers of interfaces.
-
-### How IApplicationDbContext is designed
-
-`IApplicationDbContext` is intentionally **generic** so it does not grow as the domain grows:
+For example, an update handler loads its aggregate through the write contract:
 
 ```csharp
-public interface IApplicationDbContext
-{
-    IQueryable<TEntity> Set<TEntity>() where TEntity : class;
-    void Add<TEntity>(TEntity entity) where TEntity : class;
-    void Remove<TEntity>(TEntity entity) where TEntity : class;
-    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-}
+var product = await _productWriteRepository.GetByIdAsync(request.Id, cancellationToken)
+    .ConfigureAwait(false);
 ```
 
-Entity-specific access needed by handlers is implemented through **feature-local extension methods**, not by adding entity members to the interface.
-This keeps the contract stable and avoids coupling Application to Infrastructure details.
-
-This template makes an explicit **opinionated** trade-off here: Application extension methods are allowed to use EF Core async operators.
-We accept this technical coupling to gain real async query execution, cancellation support, and lower friction in handlers.
-The goal is practical maintainability over architectural purism.
-
-```csharp
-// Application/Products/ProductDbContextExtensions.cs
-using Microsoft.EntityFrameworkCore;
-
-internal static class ProductDbContextExtensions
-{
-    internal static Task<Product?> FindByIdAsync(
-        this IApplicationDbContext context,
-        Guid id,
-        CancellationToken cancellationToken = default)
-        => context.Set<Product>().FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
-}
-```
-
-Handlers call the extension method naturally:
-
-```csharp
-var product = await _context.FindByIdAsync(request.Id, cancellationToken);
-```
-
-When a new aggregate is added, create a new `*DbContextExtensions.cs` file next to that feature.
-The interface remains unchanged.
+New features add specific contracts and Infrastructure adapters, not `*DbContextExtensions.cs` in Application. The current write contract still exposes `SaveChangesAsync`; moving commit ownership to an explicit unit of work is pending T-13. Read-replica consistency remains pending T-14.
 
 ---
 
@@ -329,7 +303,7 @@ A policy scheme named `Bearer` selects the concrete scheme automatically based o
 
 Only enabled schemes are registered. A token for a disabled scheme or a malformed token receives a Bearer `401` challenge; disabling a scheme never relaxes token validation. If `LocalJwt` is disabled, `/auth/login`, `/auth/refresh`, and `/auth/logout` are not mapped, and the local token generator rejects direct issuance. Disabling both schemes is an invalid configuration and fails startup validation. Changes to scheme enablement require an application restart.
 
-OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and expiration are still validated; reading the untrusted `iss` claim only chooses the validator. Account ownership and internal authorization are hardened as described below. Role ownership/revocation is implemented with the bounds documented below; concurrent provisioning (T-08) and refresh-session hardening (T-06/T-07) remain pending. The entire identity subsystem is not yet production-ready.
+OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and expiration are still validated; reading the untrusted `iss` claim only chooses the validator. Account ownership, role revocation and transactional provisioning are implemented with the documented bounds. Refresh-session hardening (T-06/T-07) and production-provider validation remain pending. The entire identity subsystem is not yet production-ready.
 
 ### Decisions taken
 
@@ -364,6 +338,11 @@ OIDC requires an absolute HTTPS authority. Its issuer, audience, signature and e
    - Current database permissions, not JWT role claims, authorize each request. Login, refresh and OIDC use the same effective union of manual roles and valid linked grants; no permission cache is used.
    - External grants expire after `Auth:Provisioning:RoleGrantLifetimeMinutes` (default 5, allowed 1–60), capped by the external token's original expiration. An old but still-valid provider token may reassert old roles; this is not immediate IdP revocation.
    - Deploy the new table and audit legacy mixed-origin role assignments before upgrading an existing database. See [role ownership and revocation](docs/security/role-ownership-and-revocation.md).
+
+7. **Transactional provisioning**
+   - User creation, login association, profile changes and grants share one serializable transaction. Contention retries the complete unit in a fresh context, at most three times; failed attempts leave no partial identity writes.
+   - Apply the additive `EnforceUniqueIdentityEmail` migration for the chosen provider after reviewing duplicate normalized emails. Accounts are never merged automatically.
+   - SQLite development uses a named shared-memory database with independent request connections. See [transactional provisioning](docs/security/transactional-external-provisioning.md) for retry semantics, deployment prerequisites and validation limits.
 
 See [the external identity trust model](docs/security/external-identity-trust.md) for configuration, account-linking design, migration implications and limitations. In particular, providers that do not emit an explicit trustworthy email-verification claim (including some Entra setups) cannot use the current JIT policy without a reviewed provider-specific integration. There is no public account-linking endpoint yet; do not restore email-based auto-linking as a workaround.
 
@@ -506,3 +485,10 @@ Exceptions should be reserved for:
 - Infrastructure errors
 
 This prevents exceptions from being used as control flow and keeps business logic explicit.
+# Persistencia: migraciones versionadas
+
+SQL Server y PostgreSQL disponen de migraciones independientes. Consulta
+[la guía de migraciones](docs/database/versioned-migrations.md) antes de actualizar
+una base, especialmente si fue creada con `EnsureCreated`. SQLite queda reservado
+a bases en memoria de Development/Testing. La separación del arranque, migraciones
+y bootstrap administrativo (T-10) sigue pendiente.

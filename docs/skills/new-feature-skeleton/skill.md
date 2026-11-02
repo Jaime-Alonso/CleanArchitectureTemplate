@@ -22,7 +22,7 @@ This skill is intentionally opinionated: it prioritizes practical consistency ov
 - One public type per file.
 - Use `Result` / `Result<T>` for expected business outcomes.
 - Use async handlers with `CancellationToken`.
-- EF Core async operators in Application extension methods are allowed by explicit decision.
+- Follow ADR-0001: Application uses specific repository/query contracts; EF Core and Dapper stay in Infrastructure.
 
 ## Generation Rules
 
@@ -32,8 +32,7 @@ Create:
 - `src/CleanTemplate.Application/<FeatureName>/Commands/<UseCaseName>/<UseCaseName>CommandHandler.cs`
 - `src/CleanTemplate.Application/<FeatureName>/Commands/<UseCaseName>/<UseCaseName>CommandValidator.cs`
 
-If missing, create feature extension file:
-- `src/CleanTemplate.Application/<FeatureName>/<FeatureSingular>DbContextExtensions.cs`
+Reuse or add a specific write repository contract under `Application/Contracts` and its EF implementation in Infrastructure. For reads, use a specific query contract and read models with a Dapper implementation. Register new adapters in Infrastructure DI. Never generate Application DbContext extensions, IQueryable contracts or EF/Dapper package references.
 
 ### 2) API Contracts
 Create:
@@ -79,14 +78,7 @@ At minimum include:
 - fallback -> `Results.BadRequest(...)`
 
 ## Opinionated Decision (Explicit)
-This template explicitly accepts EF Core async usage in Application feature extension methods (for example, `FirstOrDefaultAsync`).
-
-Reason:
-- real async query execution
-- cancellation support
-- lower handler complexity
-
-This is intentional and not a purist Clean Architecture stance.
+ADR-0001 (`docs/adr/0001-data-access-and-dependencies.md`) keeps EF Core writes and Dapper reads in Infrastructure behind specific Application contracts. Handlers await contract methods with cancellation and ConfigureAwait(false); handler tests use repository doubles, not simulated EF async LINQ. Follow the current write repository commit convention until T-13 introduces an explicit unit of work; do not invent a parallel commit model.
 
 ## Required Validation
 Run:

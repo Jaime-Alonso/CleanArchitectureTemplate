@@ -215,6 +215,7 @@ public sealed class RoleSynchronizationTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Provisioner.ProvisionAsync(Identity(fixture)));
 
+        Assert.Empty(await fixture.Db.Users.ToListAsync());
         Assert.Empty(await fixture.Db.Set<ExternalRoleGrant>().ToListAsync());
         Assert.Empty(await fixture.Db.UserRoles.ToListAsync());
     }

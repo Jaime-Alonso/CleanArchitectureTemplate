@@ -1,6 +1,6 @@
 # External identity trust and internal authorization
 
-Status: T-01/T-02/T-03 implementation. Explicit account linking is designed below but has no public endpoint yet. Concurrent provisioning (T-08) and refresh-session hardening (T-06/T-07) remain separate work. See [role ownership and revocation](role-ownership-and-revocation.md) for the permission model, bounds and mandatory legacy-role review.
+Status: T-01/T-02/T-03/T-08 implementation. Explicit account linking is designed below but has no public endpoint yet. Refresh-session hardening (T-06/T-07) remains separate work. See [role ownership and revocation](role-ownership-and-revocation.md) and [transactional provisioning](transactional-external-provisioning.md) for bounds, migrations, validation limits and mandatory legacy-data review.
 
 ## Trust boundary
 
@@ -79,11 +79,11 @@ This changes how external logins are keyed and therefore requires an explicit ro
 - Review registered provider claims before enabling provisioning. Previously accepted users without verified email may now be denied internal permissions.
 - Change external enablement/tenant configuration through controlled deployment and restart the application; do not rely on partial live reload of authentication options.
 - Synchronization now removes obsolete grants belonging to the current login without altering manual assignments. Legacy mixed-origin AspNetUserRoles rows cannot be classified automatically and require review. Still-valid provider JWTs can reassert old roles until their original expiration; the configured grant TTL is not a promise of instantaneous IdP revocation. See the linked role policy for exact bounds.
-- Concurrent first access can still leave partial work until T-08 adds transactional guarantees. Do not declare external identity production-ready on the strength of these increments alone.
+- Provisioning now uses isolated serializable transactions and bounded whole-unit retries, with a unique normalized-email index. Apply the additive index migration and review duplicate normalized emails first. SQLite concurrency tests and provider SQL generation do not replace validation on real SQL Server/PostgreSQL. Do not declare external identity production-ready on the strength of these increments alone.
 
 ## Verification
 
 - Relational SQLite/Identity tests exercise email collisions, verification, exact issuer/subject separation, stable profile updates, tenant changes and refusal to silently migrate legacy logins.
 - HTTP tests validate signed JWTs with static test metadata; they exercise spoofed internal claims, sanitized roles, tenant restrictions, duplicate claims, disabled provisioning and repeated transformation. They do not contact a real provider.
 - A full-host test verifies that a User token can read products but cannot create, update or delete them. Existing Admin CRUD tests remain part of the regression suite.
-- Role tests additionally verify TTL, local-token permission re-evaluation, manual/source ownership and atomic grant replacement. Real-provider and production-engine testing, migration rehearsals, legacy-role review and concurrent provisioning remain required before production.
+- Role tests additionally verify TTL, local-token permission re-evaluation, manual/source ownership and atomic grant replacement. Real-provider and production-engine testing, migration rehearsals, legacy-role review and production-provider concurrency validation remain required before production.

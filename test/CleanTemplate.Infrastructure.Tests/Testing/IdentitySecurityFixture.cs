@@ -1,5 +1,6 @@
 using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Security;
+using CleanTemplate.Infrastructure.Extensions;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;
 using CleanTemplate.Infrastructure.Security;
@@ -44,7 +45,7 @@ internal sealed class IdentitySecurityFixture(SqliteConnection connection, Servi
         services.AddScoped<IExternalRoleMapper, ExternalRoleMapper>();
         services.AddScoped<IUserAuthorizationService, UserAuthorizationService>();
         services.AddScoped<IAuthUserService, AuthUserService>();
-        services.AddScoped<ExternalIdentityProvisioningService>();
+        services.AddExternalIdentityProvisioning();
         var provider = services.BuildServiceProvider();
         var scope = provider.CreateAsyncScope();
         var fixture = new IdentitySecurityFixture(connection, provider, scope);

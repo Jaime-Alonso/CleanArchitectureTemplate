@@ -124,6 +124,7 @@ public sealed class ExternalIdentityProvisioningServiceTests
 
         Assert.True(second.IsSuccess);
         Assert.Equal(first.Value.InternalUserId, second.Value.InternalUserId);
+        await fixture.Db.Entry(user).ReloadAsync(); // Provisioning now uses an isolated context per transaction.
         Assert.Equal(username, user.UserName);
         Assert.Equal("changed@example.test", user.Email);
         Assert.True(user.EmailConfirmed);

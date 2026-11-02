@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CleanTemplate.Infrastructure\CleanTemplate.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\CleanTemplate.Migrations.SqlServer\CleanTemplate.Migrations.SqlServer.csproj" />
+    <ProjectReference Include="..\..\src\CleanTemplate.Migrations.PostgreSql\CleanTemplate.Migrations.PostgreSql.csproj" />
   </ItemGroup>
 
 </Project>

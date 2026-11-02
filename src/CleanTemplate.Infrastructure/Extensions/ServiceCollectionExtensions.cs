@@ -32,6 +32,13 @@ public static class ServiceCollectionExtensions
 
         if (provider == DatabaseProvider.SqliteInMemory)
         {
+            var sqliteOptions = new SqliteConnectionStringBuilder(connectionString);
+            if (sqliteOptions.Mode != SqliteOpenMode.Memory || sqliteOptions.Cache != SqliteCacheMode.Shared
+                || string.IsNullOrWhiteSpace(sqliteOptions.DataSource) || sqliteOptions.DataSource == ":memory:")
+            {
+                throw new InvalidOperationException("SqliteInMemory requires a named database with Mode=Memory;Cache=Shared for isolated request connections.");
+            }
+
             services.AddSingleton(sp =>
             {
                 var keepAliveConnection = new SqliteConnection(connectionString);
@@ -49,13 +56,14 @@ public static class ServiceCollectionExtensions
             switch (provider)
             {
                 case DatabaseProvider.SqlServer:
-                    options.UseSqlServer(connectionString);
+                    options.UseSqlServer(connectionString, sql => sql.MigrationsAssembly("CleanTemplate.Migrations.SqlServer"));
                     break;
                 case DatabaseProvider.PostgreSql:
-                    options.UseNpgsql(connectionString);
+                    options.UseNpgsql(connectionString, sql => sql.MigrationsAssembly("CleanTemplate.Migrations.PostgreSql"));
                     break;
                 case DatabaseProvider.SqliteInMemory:
-                    options.UseSqlite(sp.GetRequiredService<SqliteConnection>());
+                    _ = sp.GetRequiredService<SqliteConnection>(); // Keep the named memory database alive, not a shared request connection.
+                    options.UseSqlite(connectionString);
                     break;
                 default:
                     throw new InvalidOperationException($"Unsupported database provider '{provider}'.");
@@ -128,7 +136,6 @@ public static class ServiceCollectionExtensions
 
         var cacheOptions = configuration.GetSection(CacheOptions.SectionName).Get<CacheOptions>() ?? new CacheOptions();
 
-        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<IdentityDataSeeder>();
 
         switch (cacheOptions.Provider)
@@ -170,7 +177,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProductReadRepository, ProductReadRepository>();
         services.AddScoped<IProductWriteRepository, ProductWriteRepository>();
         services.AddScoped<IExternalRoleMapper, ExternalRoleMapper>();
-        services.AddScoped<IExternalIdentityProvisioningService, ExternalIdentityProvisioningService>();
+        services.AddExternalIdentityProvisioning();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IAuthUserService, AuthUserService>();
         services.AddScoped<IUserAuthorizationService, UserAuthorizationService>();

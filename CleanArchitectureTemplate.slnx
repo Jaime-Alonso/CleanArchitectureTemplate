@@ -13,6 +13,8 @@
   </Folder>
   <Folder Name="/05. Infrastructure/">
     <Project Path="src/CleanTemplate.Infrastructure/CleanTemplate.Infrastructure.csproj" />
+    <Project Path="src/CleanTemplate.Migrations.SqlServer/CleanTemplate.Migrations.SqlServer.csproj" />
+    <Project Path="src/CleanTemplate.Migrations.PostgreSql/CleanTemplate.Migrations.PostgreSql.csproj" />
   </Folder>
   <Folder Name="/06. Api/">
     <Project Path="src/CleanTemplate.Api/CleanTemplate.Api.csproj" />
@@ -21,6 +23,7 @@
     <Project Path="src/CleanTemplate.Host/CleanTemplate.Host.csproj" />
   </Folder>
   <Folder Name="/08. Tests/">
+    <Project Path="test/CleanTemplate.ArchitectureTests/CleanTemplate.ArchitectureTests.csproj" />
     <Project Path="test/CleanTemplate.Domain.Tests/CleanTemplate.Domain.Tests.csproj" />
     <Project Path="test/CleanTemplate.Application.Tests/CleanTemplate.Application.Tests.csproj" />
     <Project Path="test/CleanTemplate.Api.IntegrationTests/CleanTemplate.Api.IntegrationTests.csproj" />
