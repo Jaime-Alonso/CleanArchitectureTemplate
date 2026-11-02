@@ -1,4 +1,4 @@
-# Migraciones versionadas (T-09, primer incremento)
+# Migraciones versionadas (T-09)
 
 ## Alcance y estado
 
@@ -98,15 +98,40 @@ Ruta recomendada: migración lado a lado con ventana de mantenimiento.
 
 No se suministra una conversión universal: el esquema de una instalación sin
 historial no puede inferirse con seguridad. El procedimiento debe ensayarse sobre
-un clon antes del corte; no se declara probado para instalaciones existentes.
+un clon antes del corte; el ensayo automatizado descrito abajo no acredita una
+instalación existente concreta.
 
-## Evidencia y validación pendiente
+## Evidencia y límites de aceptación
 
 Las pruebas `VersionedMigrationsTests` verifican separación de assemblies, snapshot
 actual, generación SQL de creación/upgrade idempotente/rollback y restricciones
 del inicializador SQLite. Generar SQL **no demuestra** ejecución en motor real.
 
-La aceptación de T-09 sigue pendiente de ejecutar en ambos motores: creación vacía,
-reaplicación sin cambios, actualización desde una versión publicada con datos,
-fallo/recuperación y ensayo de traslado de una instalación EnsureCreated. En el
-entorno de este incremento Docker está instalado pero su daemon no está disponible.
+El 2 de noviembre de 2026 Docker respondió con daemon 29.8.2. La ejecución de
+`./scripts/tests/Test-RefreshTokenRotation.ps1` superó 25/25 pruebas en SQL Server
+2022 y 25/25 en PostgreSQL 17, sin omisiones. Esas pruebas usan contenedores propios,
+bases aisladas y migraciones EF reales, incluyendo la actualización del esquema
+previo de sesiones con datos; no ejecutan los scripts idempotentes ni ensayan el
+traslado EnsureCreated. La solución `dotnet test CleanArchitectureTemplate.slnx
+-c Release --nologo` superó 240 pruebas, sin fallos ni omisiones (7 Domain, 19
+Application, 38 Architecture, 108 Infrastructure y 68 API).
+
+El 2 de noviembre de 2026 `./scripts/tests/Test-VersionedMigrations.ps1` ejecutó
+secuencialmente `VersionedMigrationsAcceptanceTests`: **4/4 SQL Server 2022 y 4/4
+PostgreSQL 17**, sin fallos ni omisiones. Cada ejecución usa un contenedor nuevo y
+bases de nombre aleatorio propias, que elimina al finalizar. Los scripts proceden
+de `IMigrator`; el ejecutor separa lotes `GO` para SQL Server. Se comprueban creación,
+reaplicación, upgrade desde InitialCreate con usuario y datos, fallo por índice único
+de emails, historial sin falsificar, corrección y recuperación, y unicidad posterior.
+
+El ensayo lado a lado crea el origen con EnsureCreated y el destino con el script,
+transfiere con columnas explícitas un producto y un usuario Identity, y verifica
+identificadores, datos del producto, email normalizado, hash y security stamp. No
+transfiere roles, claims, logins, tokens, grants ni secuencias; tampoco representa
+versiones antiguas arbitrarias, volúmenes reales, autenticación o corte operativo.
+No es una conversión universal ni una certificación productiva.
+
+`dotnet test CleanArchitectureTemplate.slnx -c Release --nologo` superó 240 pruebas,
+sin fallos, con 4 omitidas: son las cuatro pruebas de aceptación real que requieren
+el ejecutor anterior (ejecutadas sin omisión en cada motor). Desglose: 7 Domain,
+19 Application, 38 Architecture, 108 Infrastructure y 68 API. T-10 sigue pendiente.
