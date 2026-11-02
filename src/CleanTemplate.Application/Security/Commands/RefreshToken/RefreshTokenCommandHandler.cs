@@ -27,22 +27,22 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
 
     public async Task<Result<AuthSession>> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
     {
-        var consumeResult = await _refreshTokenService.ConsumeAsync(
+        var lookupResult = await _refreshTokenService.FindValidAsync(
             request.RefreshToken,
             request.ClientIp,
             cancellationToken).ConfigureAwait(false);
 
-        if (consumeResult is null)
+        if (lookupResult is null)
         {
             _logger.LogWarning("Refresh token rejected");
             return Result<AuthSession>.Failure(Error.Failure("Auth.InvalidRefreshToken", "Refresh token is invalid or expired."));
         }
 
-        var user = await _authUserService.FindByIdAsync(consumeResult.UserId, cancellationToken).ConfigureAwait(false);
+        var user = await _authUserService.FindByIdAsync(lookupResult.UserId, cancellationToken).ConfigureAwait(false);
         if (user is null)
         {
-            _logger.LogWarning("Refresh token user not found: {UserId}", consumeResult.UserId);
-            return Result<AuthSession>.Failure(Error.NotFound("Users.NotFound", $"User '{consumeResult.UserId}' was not found."));
+            _logger.LogWarning("Refresh token user not found: {UserId}", lookupResult.UserId);
+            return Result<AuthSession>.Failure(Error.NotFound("Users.NotFound", $"User '{lookupResult.UserId}' was not found."));
         }
 
         if (await _authUserService.IsLockedOutAsync(user.Id, cancellationToken).ConfigureAwait(false))
@@ -53,11 +53,18 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
 
         var roles = await _authUserService.GetRolesAsync(user.Id, cancellationToken).ConfigureAwait(false);
         var token = _tokenGenerator.Generate(user, roles);
-        var refreshResult = await _refreshTokenService.IssueAsync(
+        var refreshResult = await _refreshTokenService.RotateAsync(
+            request.RefreshToken,
             user.Id,
             token.JwtId,
             request.ClientIp,
             cancellationToken).ConfigureAwait(false);
+
+        if (refreshResult is null)
+        {
+            _logger.LogWarning("Refresh token rotation rejected");
+            return Result<AuthSession>.Failure(Error.Failure("Auth.InvalidRefreshToken", "Refresh token is invalid or expired."));
+        }
 
         return Result<AuthSession>.Success(new AuthSession
         {

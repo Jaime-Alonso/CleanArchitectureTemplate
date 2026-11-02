@@ -40,7 +40,10 @@ public sealed class LogoutCommandHandlerTests
         public Task<RefreshTokenIssueResult> IssueAsync(Guid userId, string jwtId, string? createdByIp, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<RefreshTokenConsumptionResult?> ConsumeAsync(string refreshToken, string? consumedByIp, CancellationToken cancellationToken = default)
+        public Task<RefreshTokenIssueResult?> RotateAsync(string refreshToken, Guid userId, string jwtId, string? createdByIp, CancellationToken cancellationToken = default)
+            => Task.FromResult<RefreshTokenIssueResult?>(null);
+
+        public Task<RefreshTokenConsumptionResult?> FindValidAsync(string refreshToken, string? consumedByIp, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<bool> RevokeAsync(string refreshToken, string? revokedByIp, CancellationToken cancellationToken = default)

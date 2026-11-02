@@ -113,6 +113,24 @@ public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplica
     }
 
     [Fact]
+    public async Task Refresh_WithConsumedToken_ReturnsUnauthorizedAndReplacementRemainsUsable()
+    {
+        using var client = CreateClient("198.51.100.16");
+        var login = await LoginAsync(client);
+        using var first = await client.PostAsJsonAsync("/auth/refresh", new { login.RefreshToken });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var replacement = await first.Content.ReadFromJsonAsync<LoginResponse>();
+        Assert.NotNull(replacement);
+
+        using var replay = await client.PostAsJsonAsync("/auth/refresh", new { login.RefreshToken });
+        Assert.Equal(HttpStatusCode.Unauthorized, replay.StatusCode);
+
+        // T-06 rejects the consumed token; family-wide revocation belongs to T-07.
+        using var next = await client.PostAsJsonAsync("/auth/refresh", new { replacement.RefreshToken });
+        Assert.Equal(HttpStatusCode.OK, next.StatusCode);
+    }
+
+    [Fact]
     public async Task Logout_WithRefreshToken_RevokesToken()
     {
         using var client = CreateClient("198.51.100.14");

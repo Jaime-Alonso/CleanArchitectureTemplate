@@ -36,6 +36,8 @@ public sealed class RefreshTokenCommandHandlerTests
         Assert.True(result.IsSuccess);
         Assert.Equal("access-token", result.Value.AccessToken);
         Assert.Equal("new-refresh-token", result.Value.RefreshToken);
+        Assert.Equal(("valid-refresh-token", userId, "jwt-id", "127.0.0.1"), refreshTokenService.LastRotation);
+        Assert.Equal(0, refreshTokenService.IssueCalls);
     }
 
     [Fact]
@@ -53,6 +55,68 @@ public sealed class RefreshTokenCommandHandlerTests
 
         Assert.True(result.IsFailure);
         Assert.Contains(result.Errors, error => error.Code == "Auth.InvalidRefreshToken");
+    }
+
+    [Fact]
+    public async Task Handle_WhenRotationLosesRace_DoesNotReturnGeneratedTokens()
+    {
+        var userId = Guid.NewGuid();
+        var refresh = new FakeRefreshTokenService
+        {
+            ConsumeResult = new RefreshTokenConsumptionResult { UserId = userId },
+            RejectRotation = true
+        };
+        var handler = new RefreshTokenCommandHandler(
+            new FakeAuthUserService { User = new AuthUser { Id = userId, Email = "user@example.test" } },
+            new FakeTokenGenerator(), refresh, NullLogger<RefreshTokenCommandHandler>.Instance);
+
+        var result = await handler.Handle(new RefreshTokenCommand { RefreshToken = "raced-token" }, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains(result.Errors, error => error.Code == "Auth.InvalidRefreshToken");
+        Assert.True(refresh.RotationCalled);
+        Assert.Equal(0, refresh.IssueCalls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Handle_WhenUserIsMissingOrLocked_DoesNotRotate(bool locked)
+    {
+        var userId = Guid.NewGuid();
+        var refresh = new FakeRefreshTokenService
+        {
+            ConsumeResult = new RefreshTokenConsumptionResult { UserId = userId }
+        };
+        var handler = new RefreshTokenCommandHandler(
+            new FakeAuthUserService
+            {
+                User = locked ? new AuthUser { Id = userId, Email = "user@example.test" } : null,
+                IsLockedOutResult = locked
+            },
+            new FakeTokenGenerator(), refresh, NullLogger<RefreshTokenCommandHandler>.Instance);
+
+        var result = await handler.Handle(new RefreshTokenCommand { RefreshToken = "valid-token" }, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.False(refresh.RotationCalled);
+        Assert.Contains(result.Errors, error => error.Code == (locked ? "Auth.LockedOut" : "Users.NotFound"));
+    }
+
+    [Fact]
+    public async Task Handle_WhenAccessTokenGenerationFails_DoesNotConsumeRefreshToken()
+    {
+        var userId = Guid.NewGuid();
+        var refresh = new FakeRefreshTokenService { ConsumeResult = new RefreshTokenConsumptionResult { UserId = userId } };
+        var handler = new RefreshTokenCommandHandler(
+            new FakeAuthUserService { User = new AuthUser { Id = userId, Email = "user@example.test" } },
+            new FakeTokenGenerator { Fail = true }, refresh, NullLogger<RefreshTokenCommandHandler>.Instance);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(
+            new RefreshTokenCommand { RefreshToken = "valid-token" }, CancellationToken.None));
+
+        Assert.False(refresh.RotationCalled);
+        Assert.Equal(0, refresh.IssueCalls);
     }
 
     private sealed class FakeAuthUserService : IAuthUserService
@@ -85,8 +149,13 @@ public sealed class RefreshTokenCommandHandlerTests
 
     private sealed class FakeTokenGenerator : ILocalJwtTokenGenerator
     {
+        public bool Fail { get; init; }
+
         public LocalTokenResult Generate(AuthUser user, IReadOnlyCollection<string> roles)
         {
+            if (Fail)
+                throw new InvalidOperationException("Injected signing failure.");
+
             return new LocalTokenResult
             {
                 AccessToken = "access-token",
@@ -99,9 +168,14 @@ public sealed class RefreshTokenCommandHandlerTests
     private sealed class FakeRefreshTokenService : IRefreshTokenService
     {
         public RefreshTokenConsumptionResult? ConsumeResult { get; set; }
+        public bool RejectRotation { get; set; }
+        public bool RotationCalled { get; private set; }
+        public (string Token, Guid UserId, string JwtId, string? Ip)? LastRotation { get; private set; }
+        public int IssueCalls { get; private set; }
 
         public Task<RefreshTokenIssueResult> IssueAsync(Guid userId, string jwtId, string? createdByIp, CancellationToken cancellationToken = default)
         {
+            IssueCalls++;
             return Task.FromResult(new RefreshTokenIssueResult
             {
                 RefreshToken = "new-refresh-token",
@@ -109,7 +183,18 @@ public sealed class RefreshTokenCommandHandlerTests
             });
         }
 
-        public Task<RefreshTokenConsumptionResult?> ConsumeAsync(string refreshToken, string? consumedByIp, CancellationToken cancellationToken = default)
+        public Task<RefreshTokenIssueResult?> RotateAsync(string refreshToken, Guid userId, string jwtId, string? createdByIp, CancellationToken cancellationToken = default)
+        {
+            RotationCalled = true;
+            LastRotation = (refreshToken, userId, jwtId, createdByIp);
+            return Task.FromResult<RefreshTokenIssueResult?>(RejectRotation ? null : new RefreshTokenIssueResult
+            {
+                RefreshToken = "new-refresh-token",
+                ExpiresAtUtc = DateTime.UtcNow.AddDays(7)
+            });
+        }
+
+        public Task<RefreshTokenConsumptionResult?> FindValidAsync(string refreshToken, string? consumedByIp, CancellationToken cancellationToken = default)
             => Task.FromResult(ConsumeResult);
 
         public Task<bool> RevokeAsync(string refreshToken, string? revokedByIp, CancellationToken cancellationToken = default)

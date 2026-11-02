@@ -53,7 +53,7 @@ public sealed class RefreshTokenService : IRefreshTokenService
         };
     }
 
-    public async Task<RefreshTokenConsumptionResult?> ConsumeAsync(
+    public async Task<RefreshTokenConsumptionResult?> FindValidAsync(
         string refreshToken,
         string? consumedByIp,
         CancellationToken cancellationToken = default)
@@ -61,6 +61,7 @@ public sealed class RefreshTokenService : IRefreshTokenService
         var tokenHash = ComputeHash(refreshToken);
 
         var entity = await _dbContext.Set<RefreshToken>()
+            .AsNoTracking()
             .SingleOrDefaultAsync(x => x.TokenHash == tokenHash, cancellationToken)
             .ConfigureAwait(false);
 
@@ -75,14 +76,62 @@ public sealed class RefreshTokenService : IRefreshTokenService
             return null;
         }
 
-        entity.Revoke(now, consumedByIp);
-
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
         return new RefreshTokenConsumptionResult
         {
             UserId = entity.UserId
         };
+    }
+
+    public async Task<RefreshTokenIssueResult?> RotateAsync(
+        string refreshToken,
+        Guid userId,
+        string jwtId,
+        string? createdByIp,
+        CancellationToken cancellationToken = default)
+    {
+        // A returned session must not depend on an outer transaction's later commit.
+        if (_dbContext.Database.CurrentTransaction is not null || System.Transactions.Transaction.Current is not null)
+        {
+            throw new InvalidOperationException("Refresh token rotation requires its own transaction.");
+        }
+
+        var tokenHash = ComputeHash(refreshToken);
+        var replacement = GenerateRefreshToken();
+        var replacementHash = ComputeHash(replacement);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var expiresAtUtc = now.AddDays(_refreshTokenDays);
+        var entity = RefreshToken.Create(userId, jwtId, replacementHash, now, expiresAtUtc, createdByIp);
+
+        // The conditional write takes the database lock before any read: no process-local
+        // synchronization or read-then-update race, including across application instances.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var affected = await _dbContext.Set<RefreshToken>()
+            .Where(x => x.TokenHash == tokenHash && x.UserId == userId &&
+                x.RevokedAtUtc == null && x.ExpiresAtUtc > now)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.RevokedAtUtc, (DateTime?)now)
+                .SetProperty(x => x.RevokedByIp, createdByIp)
+                .SetProperty(x => x.ReplacedByTokenHash, replacementHash), cancellationToken)
+            .ConfigureAwait(false);
+        if (affected != 1)
+        {
+            return null;
+        }
+
+        _dbContext.Set<RefreshToken>().Add(entity);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Do not leave an insert queued for an unrelated later SaveChanges.
+            _dbContext.Entry(entity).State = EntityState.Detached;
+            throw;
+        }
+
+        return new RefreshTokenIssueResult { RefreshToken = replacement, ExpiresAtUtc = expiresAtUtc };
     }
 
     public async Task<bool> RevokeAsync(

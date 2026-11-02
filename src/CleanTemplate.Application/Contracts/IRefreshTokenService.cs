@@ -10,9 +10,20 @@ public interface IRefreshTokenService
         string? createdByIp,
         CancellationToken cancellationToken = default);
 
-    Task<RefreshTokenConsumptionResult?> ConsumeAsync(
+    // Advisory lookup only: it neither consumes nor reserves the token.
+    // A successful lookup does not guarantee that RotateAsync will succeed.
+    Task<RefreshTokenConsumptionResult?> FindValidAsync(
         string refreshToken,
         string? consumedByIp,
+        CancellationToken cancellationToken = default);
+
+    // Atomically consumes a valid token belonging to userId and persists its replacement.
+    // Returns null if another request already consumed/revoked it, or it expired.
+    Task<RefreshTokenIssueResult?> RotateAsync(
+        string refreshToken,
+        Guid userId,
+        string jwtId,
+        string? createdByIp,
         CancellationToken cancellationToken = default);
 
     Task<bool> RevokeAsync(
