@@ -38,7 +38,7 @@ public static class RateLimitingExtensions
                         _ => BuildFixedWindowOptions(policyOptions)));
             }
 
-            rateLimiterOptions.OnRejected = async (context, cancellationToken) =>
+            rateLimiterOptions.OnRejected = (context, cancellationToken) =>
             {
                 if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
                 {
@@ -57,14 +57,7 @@ public static class RateLimitingExtensions
                     GetPartitionKey(context.HttpContext),
                     context.HttpContext.Response.Headers.RetryAfter.ToString());
 
-                await context.HttpContext.Response.WriteAsJsonAsync(
-                    new
-                    {
-                        error = "rate_limit_exceeded",
-                        detail = "Too many requests. Please retry later."
-                    },
-                    cancellationToken)
-                    .ConfigureAwait(false);
+                return ValueTask.CompletedTask;
             };
         });
 

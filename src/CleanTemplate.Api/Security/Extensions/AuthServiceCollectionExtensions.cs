@@ -111,6 +111,7 @@ public static class AuthServiceCollectionExtensions
     private static void ConfigureLocalJwt(JwtBearerOptions options, LocalJwtOptions localJwt)
     {
         options.RequireHttpsMetadata = true;
+        options.IncludeErrorDetails = false;
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -133,6 +134,7 @@ public static class AuthServiceCollectionExtensions
         options.Authority = oidc.Authority;
         options.Audience = oidc.Audience;
         options.RequireHttpsMetadata = true;
+        options.IncludeErrorDetails = false;
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {

@@ -73,9 +73,8 @@ At minimum include:
   - `None` -> no policy call
 
 ## Error Mapping Pattern
-- `NotFound` -> `Results.NotFound(...)`
-- `Validation` -> `Results.BadRequest(...)`
-- fallback -> `Results.BadRequest(...)`
+- Use `ToHttpErrorResult()` for failed `Result` values; do not generate ad-hoc error bodies. Validation uses `ValidationProblemDetails`; unexpected failures become 500, not 400.
+- Preserve authentication challenge/forbid semantics and headers. Do not put exception messages, secrets or untrusted validation descriptions into HTTP responses. See the HTTP error contract in README.
 
 ## Opinionated Decision (Explicit)
 ADR-0001 (`docs/adr/0001-data-access-and-dependencies.md`) keeps EF Core writes and Dapper reads in Infrastructure behind specific Application contracts. Handlers await contract methods with cancellation and ConfigureAwait(false); handler tests use repository doubles, not simulated EF async LINQ. Commit using the scoped IUnitOfWork; use its explicit transaction and Result callback for multiple flushes. Return failure for expected business errors to roll back; discard the scope after failure. Flush explicitly with SaveChangesAsync: transaction success does not flush pending changes, which remain tracked and could be saved later.

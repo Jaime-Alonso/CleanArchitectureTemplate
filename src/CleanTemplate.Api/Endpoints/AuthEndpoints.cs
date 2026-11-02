@@ -1,4 +1,5 @@
 using CleanTemplate.Api.Endpoints.Contracts.Auth;
+using CleanTemplate.Api.ExceptionHandling;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Api.Security.Options;
 using CleanTemplate.Application.Security.Commands.Login;
@@ -59,7 +60,8 @@ public static class AuthEndpoints
 
         if (sessionResult.IsFailure)
         {
-            return sessionResult.ToHttpErrorResult(_ => Results.Unauthorized());
+            return sessionResult.ToHttpErrorResult(errors => errors.All(e => e.Code is "Auth.InvalidCredentials" or "Auth.LockedOut")
+                ? new BearerUnauthorizedResult() : Results.Problem(statusCode: StatusCodes.Status500InternalServerError));
         }
 
         var session = sessionResult.Value;
@@ -91,7 +93,8 @@ public static class AuthEndpoints
 
         if (sessionResult.IsFailure)
         {
-            return sessionResult.ToHttpErrorResult(_ => Results.Unauthorized());
+            return sessionResult.ToHttpErrorResult(errors => errors.All(e => e.Code is "Auth.InvalidRefreshToken" or "Auth.LockedOut")
+                ? new BearerUnauthorizedResult() : Results.Problem(statusCode: StatusCodes.Status500InternalServerError));
         }
 
         var session = sessionResult.Value;

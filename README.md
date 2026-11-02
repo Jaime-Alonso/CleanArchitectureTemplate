@@ -10,6 +10,24 @@ The template is designed to be:
 
 ---
 
+## HTTP error contract
+
+Error responses use `application/problem+json` regardless of the request's `Accept` header, preserving the original HTTP status (`ProblemDetails`, or `ValidationProblemDetails` with an `errors` object for validation and binding failures). They include the HTTP `status`, a stable `code`, and a request-specific `traceId`. Validation keys identify fields when available; the empty key denotes an unassociated error. Messages are deliberately generic except for explicit, safe endpoint validation messages. JSON binding paths use JSON property names; Application validation uses its property names. Unauthorized Result, login, and refresh failures include a `WWW-Authenticate: Bearer` challenge without exposing token failure details.
+
+| Status | `code` |
+| --- | --- |
+| 400 | `request.invalid` |
+| 401 | `auth.unauthorized` |
+| 403 | `auth.forbidden` |
+| 404 | `resource.not_found` |
+| 409 | `resource.conflict` |
+| 429 | `rate_limit.exceeded` |
+| 5xx | `server.error` |
+
+Other 4xx responses use `request.error`. Authentication challenges and forbids remain handled by the configured schemes; `WWW-Authenticate` is retained, without token validation details. Rate-limit responses retain `Retry-After` when provided by the limiter. Unexpected failures and exception messages are not returned to clients. Cancellation or a response already started may prevent an error body from being written.
+
+**Breaking change:** clients must replace the previous `{ errors: [ ... ] }` Result envelope and `{ error: "rate_limit_exceeded", detail: ... }` limiter envelope with the contract above; do not rely on internal error descriptions or codes. `ExpectedVersion` validation remains a 400 with an `expectedVersion` field; stale versions remain 409. OpenAPI completeness is tracked separately.
+
 ## Before You Start
 
 > [!IMPORTANT]
