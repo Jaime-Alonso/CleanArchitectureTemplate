@@ -1,8 +1,11 @@
 using System.Text.RegularExpressions;
 using CleanTemplate.Application.Contracts;
+using CleanTemplate.Application.Products.ReadModels;
 using CleanTemplate.Domain.Entities;
+using CleanTemplate.Infrastructure.Database;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Persistence;
+using CleanTemplate.Infrastructure.Repositories.Reads;
 using CleanTemplate.Infrastructure.Repositories.Writes;
 using CleanTemplate.SharedKernel.Errors;
 using CleanTemplate.SharedKernel.Results;
@@ -17,6 +20,25 @@ namespace CleanTemplate.Infrastructure.Tests.Database;
 
 public sealed class VersionedMigrationsAcceptanceTests
 {
+    [AcceptanceFact]
+    public async Task ProductReadsHandleExtremeOffsetsOnRealDatabase()
+    {
+        await using var owned = await Database.CreateAsync();
+        await owned.Context.Database.MigrateAsync();
+        var product = new Product("pagination", null, 1m, 1);
+        owned.Context.Add(product);
+        await owned.Context.SaveChangesAsync();
+        var sqlServer = owned.Context.Database.IsSqlServer();
+        var provider = sqlServer ? DatabaseProvider.SqlServer : DatabaseProvider.PostgreSql;
+        ISqlDialect dialect = sqlServer ? new SqlServerDialect() : new PostgreSqlDialect();
+        var reads = new ProductReadRepository(new ReadDbConnectionFactory(owned.Context.Database.GetConnectionString()!, provider), dialect);
+        Assert.NotNull(await reads.GetByIdAsync(product.Id));
+        var page = await reads.GetPagedAsync(new ProductSearchCriteria { Page = int.MaxValue, PageSize = int.MaxValue });
+        Assert.Empty(page.Items);
+        Assert.Equal(1, page.TotalCount);
+        Assert.Equal(1, page.TotalPages);
+    }
+
     [AcceptanceFact]
     public async Task UnitOfWorkCommitsAndRollsBackMultipleFlushes()
     {

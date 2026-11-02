@@ -162,9 +162,31 @@ public static class ServiceCollectionExtensions
                 throw new InvalidOperationException($"Unsupported cache provider '{cacheOptions.Provider}'.");
         }
 
-        var readConnectionString = configuration.GetConnectionString("ReadConnection")
-            ?? configuration.GetConnectionString("DapperConnection")
-            ?? connectionString;
+        var readMode = configuration["ProductReads:Mode"] ?? "Primary";
+        var replica = configuration.GetConnectionString("ProductReadReplica");
+        var legacyReads = new[] { configuration.GetConnectionString("ReadConnection"), configuration.GetConnectionString("DapperConnection") };
+        if (legacyReads.Any(value => !string.IsNullOrWhiteSpace(value) && value != connectionString))
+        {
+            throw new InvalidOperationException("Legacy ReadConnection/DapperConnection differs from DefaultConnection. Remove it and explicitly configure ProductReads:Mode=Replica and ProductReadReplica if eventual consistency is intended.");
+        }
+
+        string readConnectionString;
+        if (string.Equals(readMode, "Primary", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(replica))
+                throw new InvalidOperationException("ProductReadReplica requires ProductReads:Mode=Replica.");
+            readConnectionString = connectionString;
+        }
+        else if (string.Equals(readMode, "Replica", StringComparison.OrdinalIgnoreCase))
+        {
+            if (provider == DatabaseProvider.SqliteInMemory || string.IsNullOrWhiteSpace(replica))
+                throw new InvalidOperationException("Replica mode requires ProductReadReplica and a non-SQLite provider.");
+            readConnectionString = replica;
+        }
+        else
+        {
+            throw new InvalidOperationException("ProductReads:Mode must be Primary or Replica.");
+        }
 
         services.AddSingleton(new ReadDbConnectionFactory(readConnectionString, provider));
         services.AddSingleton<ISqlDialect>(provider switch

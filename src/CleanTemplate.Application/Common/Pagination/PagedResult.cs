@@ -13,7 +13,7 @@ public sealed record PagedResult<T>
         int safePageSize = pageSize < 1 ? 1 : pageSize;
         int totalPages = totalCount <= 0
             ? 0
-            : (int)Math.Ceiling(totalCount / (double)safePageSize);
+            : 1 + (totalCount - 1) / safePageSize;
 
         return new PagedResult<T>
         {

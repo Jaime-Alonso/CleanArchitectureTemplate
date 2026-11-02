@@ -15,6 +15,38 @@ namespace CleanTemplate.Api.IntegrationTests.Security;
 public sealed class ProductAuthorizationTests
 {
     [Fact]
+    public async Task CreatedProductIsImmediatelyReadableOnPrimaryAndExtremePageIsEmpty()
+    {
+        using var baseFactory = new TestWebApplicationFactory();
+        var database = $"Data Source=product-read-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        using var factory = baseFactory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = database,
+                ["OpenTelemetry:Traces:Enabled"] = "false",
+                ["OpenTelemetry:Metrics:Enabled"] = "false"
+            })));
+        using var client = factory.CreateClient();
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = "read-admin", Email = "read-admin@example.test" };
+        Assert.True((await users.CreateAsync(user)).Succeeded);
+        Assert.True((await users.AddToRoleAsync(user, "Admin")).Succeeded);
+        var generator = scope.ServiceProvider.GetRequiredService<ILocalJwtTokenGenerator>();
+        var token = generator.Generate(new AuthUser { Id = user.Id, Email = user.Email }, (await users.GetRolesAsync(user)).ToArray());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        using var created = await client.PostAsJsonAsync("/api/products/", new { Name = "Immediate", Price = 1m, Stock = 1 });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var read = await client.GetAsync(created.Headers.Location);
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        Assert.Contains("Immediate", await read.Content.ReadAsStringAsync());
+        using var page = await client.GetAsync("/api/products/?page=2147483647&pageSize=2147483647");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        using var json = System.Text.Json.JsonDocument.Parse(await page.Content.ReadAsStringAsync());
+        Assert.Empty(json.RootElement.GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
     public async Task UserCanReadButCannotCreateUpdateOrDeleteProducts()
     {
         using var baseFactory = new TestWebApplicationFactory();

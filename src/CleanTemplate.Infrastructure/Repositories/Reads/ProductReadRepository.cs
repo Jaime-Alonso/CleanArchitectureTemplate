@@ -68,7 +68,7 @@ public sealed class ProductReadRepository : IProductReadRepository
 
         var sortField = MapSortField(criteria.Sorting.NormalizedSortBy);
         var isDescending = criteria.Sorting.NormalizedSortDirection == "desc";
-        var offset = (criteria.NormalizedPage - 1) * criteria.NormalizedPageSize;
+        var offset = ((long)criteria.NormalizedPage - 1) * criteria.NormalizedPageSize;
 
         var sql = _sqlDialect.Paginate(
             """
