@@ -70,6 +70,8 @@ At minimum include:
 - failure path(s) when applicable
 
 ## Endpoint Mapping Pattern
+
+- Explicitly assign every business endpoint to its version set and version (currently 1.0); preserve `X-Api-Version` and the default/retirement policy in README. Technical endpoints are neutral. Test HTTP selection, endpoint metadata and the actual OpenAPI operation/header, not just the document version.
 - Group route: `/api/<feature-lowercase>`
 - Endpoint mapping based on method + route input
 - Authorization policy:

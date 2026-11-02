@@ -28,6 +28,12 @@ Other 4xx responses use `request.error`. Authentication challenges and forbids r
 
 **Breaking change:** clients must replace the previous `{ errors: [ ... ] }` Result envelope and `{ error: "rate_limit_exceeded", detail: ... }` limiter envelope with the contract above; do not rely on internal error descriptions or codes. `ExpectedVersion` validation remains a 400 with an `expectedVersion` field; stale versions remain 409. OpenAPI completeness is tracked separately.
 
+### API operation versions
+
+Product operations and, when local JWT is enabled, `/auth/login`, `/auth/refresh` and `/auth/logout` explicitly belong to API version **1.0**. Existing paths are unchanged. Select it with `X-Api-Version: 1.0`; an absent header defaults to 1.0 for compatibility. An unsupported, malformed or ambiguous version returns 400 as `application/problem+json` with `code` and `traceId`, regardless of `Accept`. Multiple distinct values are ambiguous. Version selection happens at routing: a rejected version can precede authentication/authorization and endpoint-specific rate limiting; clients must not rely on a 401 or 429 for such requests. Health, OpenAPI and Scalar routes are technical and version-neutral. OpenAPI `info.version` names the document, not proof of operation membership; the v1 document lists each business operation with its actual header parameter.
+
+Only 1.0 is currently supported and none is deprecated. When introducing a breaking contract, explicitly map each operation to its supported versions and publish matching documents; do not silently move the default. Announce deprecation and migration guidance before marking a version deprecated, report it with `api-deprecated-versions`, and remove it only after an explicitly communicated retirement decision. No retirement date or support duration is promised here. Removing 1.0 or changing the absent-header default is a breaking change requiring a compatibility decision. `api-supported-versions` reports supported versions on matched business responses.
+
 ## Before You Start
 
 > [!IMPORTANT]

@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using CleanTemplate.Api.Endpoints.Contracts.Auth;
 using CleanTemplate.Api.ExceptionHandling;
 using CleanTemplate.Api.Extensions;
@@ -22,7 +23,8 @@ public static class AuthEndpoints
             return app;
         }
 
-        var group = app.MapGroup("/auth");
+        var versions = app.NewApiVersionSet().HasApiVersion(new ApiVersion(1, 0)).ReportApiVersions().Build();
+        var group = app.MapGroup("/auth").WithApiVersionSet(versions).MapToApiVersion(1.0);
 
         group.MapPost("/login", Login)
             .AllowAnonymous()

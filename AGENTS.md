@@ -259,6 +259,7 @@ public async Task<Result<User>> GetUserAsync(
 - Dependency injection configuration
 - Middleware and authentication
 - Maps HTTP to Application layer
+- Assign every business operation explicitly to its API version set; currently v1.0 and header `X-Api-Version` (absent defaults to 1.0). Keep technical routes version-neutral. Test actual routing, metadata and OpenAPI header/operation membership; a document version alone is not evidence. Follow the deprecation and compatibility policy in README.
 
 ---
 

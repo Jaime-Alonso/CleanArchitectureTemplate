@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using CleanTemplate.Api.Endpoints.Contracts.Products;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Application.Common.Criteria;
@@ -12,7 +13,8 @@ public static class ProductEndpoints
 {
     public static WebApplication MapProductEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/products");
+        var versions = app.NewApiVersionSet().HasApiVersion(new ApiVersion(1, 0)).ReportApiVersions().Build();
+        var group = app.MapGroup("/api/products").WithApiVersionSet(versions).MapToApiVersion(1.0);
         group.RequireAuthorization("UserOrAdmin");
 
         group.MapPost("/", CreateProduct)

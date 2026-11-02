@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using CleanTemplate.Api.Endpoints;
+using CleanTemplate.Api.Extensions;
 using CleanTemplate.Api.Security.Extensions;
 using CleanTemplate.Application.Contracts;
 using CleanTemplate.Application.Extensions;
@@ -54,6 +55,7 @@ public sealed class RoleRevocationEndpointsTests
             ["Auth:Provisioning:Admin:Roles:0"] = "external-admin"
         });
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddApiVersioningConfiguration();
         builder.Services.AddApplication();
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.Services.AddApiSecurity(builder.Configuration);
