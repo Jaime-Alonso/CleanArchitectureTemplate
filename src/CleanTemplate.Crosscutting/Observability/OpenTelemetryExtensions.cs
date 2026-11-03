@@ -15,7 +15,8 @@ public static class OpenTelemetryExtensions
     public static IServiceCollection AddOpenTelemetryObservability(
         this IServiceCollection services,
         IConfiguration configuration,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        string serviceVersion)
     {
         IConfigurationSection section = configuration.GetSection(OpenTelemetryOptions.SectionName);
         bool tracesEnabled;
@@ -41,7 +42,6 @@ public static class OpenTelemetryExtensions
             options = new OpenTelemetryOptions
             {
                 ServiceName = section["ServiceName"] ?? "CleanTemplate.Host",
-                ServiceVersion = section["ServiceVersion"] ?? "1.0.0",
                 Otlp = section.GetSection("Otlp").Get<OpenTelemetryOtlpOptions>() ?? new(),
                 Traces = tracesEnabled ? section.GetSection("Traces").Get<OpenTelemetryTracesOptions>() ?? new() : new(),
                 Metrics = new OpenTelemetryMetricsOptions { Enabled = metricsEnabled }
@@ -54,8 +54,8 @@ public static class OpenTelemetryExtensions
 
         if (string.IsNullOrWhiteSpace(options.ServiceName))
             throw new InvalidOperationException("OpenTelemetry:ServiceName must be configured.");
-        if (string.IsNullOrWhiteSpace(options.ServiceVersion))
-            throw new InvalidOperationException("OpenTelemetry:ServiceVersion must be configured.");
+        if (string.IsNullOrWhiteSpace(serviceVersion))
+            throw new ArgumentException("Artifact version is required.", nameof(serviceVersion));
         if (string.IsNullOrWhiteSpace(options.Otlp.Endpoint) || options.Otlp.Endpoint != options.Otlp.Endpoint.Trim() ||
             !Uri.TryCreate(options.Otlp.Endpoint, UriKind.Absolute, out Uri? endpointUri) ||
             (endpointUri.Scheme != Uri.UriSchemeHttp && endpointUri.Scheme != Uri.UriSchemeHttps) ||
@@ -66,7 +66,6 @@ public static class OpenTelemetryExtensions
             throw new InvalidOperationException("OpenTelemetry:Traces:SamplingRatio must be finite and between 0 and 1.");
 
         string serviceName = options.ServiceName;
-        string serviceVersion = options.ServiceVersion;
         string endpoint = options.Otlp.Endpoint;
 
         OtlpExportProtocol otlpProtocol = ResolveProtocol(options.Otlp.Protocol);
@@ -112,14 +111,19 @@ public static class OpenTelemetryExtensions
         tracing
             .SetResourceBuilder(resourceBuilder)
             .SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(samplingRatio)))
-            .AddAspNetCoreInstrumentation()
-            .AddHttpClientInstrumentation()
+            .AddPrivateHttpTracing()
             .AddOtlpExporter(exporter =>
             {
                 exporter.Endpoint = new Uri(endpoint);
                 exporter.Protocol = protocol;
             });
     }
+
+    // Keep this configuration shared with local exporter tests and ahead of exporters.
+    public static TracerProviderBuilder AddPrivateHttpTracing(this TracerProviderBuilder tracing) => tracing
+        .AddAspNetCoreInstrumentation(options => options.RecordException = false)
+        .AddHttpClientInstrumentation(options => options.RecordException = false)
+        .AddProcessor(new HttpTracePrivacyProcessor());
 
     private static void ConfigureMetrics(
         MeterProviderBuilder metrics,
@@ -132,6 +136,8 @@ public static class OpenTelemetryExtensions
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddRuntimeInstrumentation()
+            .AddMeter("CleanTemplate.Http")
+            .AddMeter("CleanTemplate.Security")
             .AddOtlpExporter(exporter =>
             {
                 exporter.Endpoint = new Uri(endpoint);

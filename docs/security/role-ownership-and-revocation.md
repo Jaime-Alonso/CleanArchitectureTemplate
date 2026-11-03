@@ -69,7 +69,7 @@ This role feature itself neither makes refresh rotation atomic nor revokes refre
 
 ## Deployment and legacy assignments
 
-This increment adds the `ExternalRoleGrants` table. Apply reviewed provider-specific migrations before enabling it on a persistent existing database. The concurrently developed SQL Server/PostgreSQL migration baselines include the entity; this feature does not regenerate or claim production validation of those migrations. See [the versioned-migrations procedure](../database/versioned-migrations.md) and T-09's remaining acceptance criteria.
+The `ExternalRoleGrants` table requires the provider-specific migrations before enabling it on an existing persistent database. Apply migrations as an explicit deployment operation; see [versioned migrations](../database/versioned-migrations.md) and [deployment operations](../database/deployment-operations.md). Rehearse the upgrade and legacy assignment review for the actual deployment.
 
 Older versions persisted both manual and externally mapped roles in `AspNetUserRoles`, without ownership metadata. Their origin cannot be inferred safely from role name, email or the next external token. **Existing rows remain manual; they are not silently deleted, reclassified or adopted by synchronization.** Before rollout, audit those assignments and explicitly remove externally originated obsolete rows or confirm their manual ownership. Otherwise a legacy Admin assignment will intentionally continue to contribute as manual Admin. This review is a mandatory deployment prerequisite, not an automated migration supplied by T-03.
 

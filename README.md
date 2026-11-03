@@ -497,6 +497,8 @@ Implementation notes:
 
 The host includes OpenTelemetry for distributed observability while keeping Serilog for application logging.
 
+See the [observability operations guide](docs/observability/operations.md) for security metrics, audit limits, proposed retention and reproducible example alerts. No monitoring backend is deployed by the template.
+
 - **Exporter**: OTLP (`OpenTelemetry:Otlp:*`)
 - **Signals**: fine-grained toggles per signal
   - `OpenTelemetry:Traces:Enabled`
@@ -508,7 +510,6 @@ Example configuration:
 ```json
 "OpenTelemetry": {
   "ServiceName": "CleanTemplate.Host",
-  "ServiceVersion": "1.0.0",
   "Otlp": {
     "Endpoint": "http://localhost:4317",
     "Protocol": "grpc"
@@ -526,6 +527,13 @@ Example configuration:
 Behavior notes:
 
 - If both toggles are `false`, OpenTelemetry is not registered.
+- The resource `service.version` comes from the Host assembly informational version, not configuration or the entry assembly of a test runner. Remove legacy `OpenTelemetry:ServiceVersion` settings.
+- The default ASP.NET Core and HttpClient trace instrumentation disables exception recording. Before the configured OTLP exporter, HTTP server/client spans identified by an HTTP method tag retain only a whitelisted method, server route template, HTTP status and a controlled status-based error type; display names use the method and server template (or `unmatched`). Raw URLs, paths, query strings, headers, user agents and client addresses are not retained as HTTP span attributes. Other spans are not sanitized. W3C trace/span IDs remain available for correlation. Route templates are application-defined: never put personal data or secrets in route literals.
+- On .NET 10 the native HttpClient activity can add an exception event independently of `RecordException`; a listener replaces its exception tags with nulls before the event is created. The event itself remains. This is a default instrumentation boundary, not a general telemetry scrubber: enrichment, additional instrumentation, listeners, processors, exporters or collector configuration can introduce or retain sensitive attributes, events and exception details. Existing activity events cannot be removed by this processor. Review every opt-in and the data leaving the process, as well as collector access controls, transformations and retention; arbitrary exporter or collector configuration is not sanitized.
+- The default Serilog sink writes JSON to stdout, including during bootstrap. File sinks are opt-in via Serilog configuration; choose access controls and retention appropriate to the deployment. Request completion logs contain a controlled method, route template, status and duration. TraceId and SpanId come from the current activity; ProblemDetails falls back to the HTTP trace identifier when no activity exists.
+- The `CleanTemplate.Http` meter records request count and duration, 5xx errors and 401/403 rejections with method, route template and status dimensions. These HTTP counters are not a security audit or an alerting system.
+- These protections cover the template's own events and selected framework sources, not arbitrary libraries or custom sinks. Review additional logging providers, libraries, OpenTelemetry instrumentation and exported data before production; URLs or other sensitive data may be present in third-party telemetry.
+- Default framework exception and EF Core categories are suppressed because exception messages can include request or database values even without sensitive-data logging. Configuration overrides, additional sinks and libraries can defeat these defaults; arbitrary configuration is not sanitized.
 - Recommended defaults: `SamplingRatio=1.0` in development, lower in production (for example `0.1` to `0.2`).
 - Request/response bodies are not captured in telemetry by default.
 
@@ -558,4 +566,4 @@ LocalJwt, when enabled, requires issuer, audience, an active signing key ID and 
 
 Production rejects `DatabaseProvider=SqliteInMemory` before opening the database unless `Database:AllowEphemeralInProduction=true` is explicitly set (strict boolean). This opt-in deliberately loses all data on restart and is not a substitute for persistent migrations or bootstrap. It creates the ephemeral schema without seeding an administrator or requiring bootstrap secrets; Staging is not automatically initialized. Readiness checks connectivity, not schema completeness. `DatabaseProvider` defaults to PostgreSQL only when absent; an empty or unknown value is invalid. Startup diagnostics identify a configuration key or section without printing values or exception messages. Fixed-window rate limits accept `WindowSeconds` from 1 through 4294967 for both Global and named policies. Provisioning email and domain rules must be well formed; external role names remain unrestricted. Review existing deployments for these stricter limits before upgrading.
 
-Rate limits require positive permit counts, nonnegative queues and supported fixed windows; invalid values are rejected instead of clamped. Cache configuration requires a defined provider, positive default TTL and a nonempty key prefix; Redis requires its connection only when selected. Enabled cleanup requires a 1–1440 minute interval and 0–365 retention days. Forwarded proxies must be IP addresses and networks valid IPv4/IPv6 CIDR prefixes without host bits. CORS entries must be HTTP(S) origins without credentials, paths, queries, fragments or wildcards. Enabled telemetry requires a nonempty service name/version, an absolute HTTP(S) OTLP endpoint without credentials, and protocol `grpc`, `http` or `httpprotobuf`; active trace sampling must be finite in [0,1]. Inactive capabilities do not require their secrets; configured scalar booleans and integers must still parse. Diagnostics may identify a whole section instead of a single field to avoid exposing exception contents.
+Rate limits require positive permit counts, nonnegative queues and supported fixed windows; invalid values are rejected instead of clamped. Cache configuration requires a defined provider, positive default TTL and a nonempty key prefix; Redis requires its connection only when selected. Enabled cleanup requires a 1–1440 minute interval and 0–365 retention days. Forwarded proxies must be IP addresses and networks valid IPv4/IPv6 CIDR prefixes without host bits. CORS entries must be HTTP(S) origins without credentials, paths, queries, fragments or wildcards. Enabled telemetry requires a nonempty service name, an absolute HTTP(S) OTLP endpoint without credentials, and protocol `grpc`, `http` or `httpprotobuf`; active trace sampling must be finite in [0,1]. Service version comes from the Host artifact. Inactive capabilities do not require their secrets; configured scalar booleans and integers must still parse. Diagnostics may identify a whole section instead of a single field to avoid exposing exception contents.

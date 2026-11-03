@@ -70,7 +70,8 @@ public sealed class RefreshTokenCleanupBackgroundService : BackgroundService
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Refresh token cleanup failed.");
+            SecurityMetrics.RecordCleanupFailure();
+            _logger.LogError("Refresh token cleanup failed ({ExceptionType}).", exception.GetType().Name);
         }
     }
 }

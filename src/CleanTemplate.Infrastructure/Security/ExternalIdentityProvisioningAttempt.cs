@@ -221,6 +221,7 @@ internal sealed class ExternalIdentityProvisioningAttempt(
 
     private Result<ProvisionResult> Reject(string code)
     {
+        SecurityMetrics.RecordRejection();
         logger.LogWarning("External provisioning rejected. Code {Code}", code);
         return Result<ProvisionResult>.Failure(new Error(code, "External identity cannot be provisioned.", ErrorType.Forbidden));
     }

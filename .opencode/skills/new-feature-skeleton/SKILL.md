@@ -8,6 +8,8 @@ metadata:
 ---
 
 ## Purpose
+Preserve the observability and privacy boundaries in `docs/observability/operations.md`: no secrets or direct PII, low-cardinality metrics, HTTP-only trace minimization and no claim that best-effort EF privilege audit covers every source.
+
 Liveness must not depend on external services. Readiness timeouts are cooperative: propagate cancellation and provider timeouts; never use `WaitAsync` to abandon checks holding scoped resources or promise a hard deadline for uncooperative providers.
 
 Preserve IP-only per-process limiting after trusted forwarded headers and before authentication/provisioning; probes remain anonymous and exempt. Loopback is trusted by default and forwarding is one hop. Aggregate and verified-client quotas require an independently operated ingress; do not trust incoming claims or imply a distributed limiter. Follow the README TLS and proxy guidance.

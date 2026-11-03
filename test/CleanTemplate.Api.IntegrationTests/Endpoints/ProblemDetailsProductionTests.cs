@@ -27,6 +27,20 @@ public sealed class ProblemDetailsProductionTests
 {
     private const string Secret = "sensitive-injected-secret";
 
+    [Fact]
+    public async Task ProblemDetails_UsesIncomingW3CTraceId()
+    {
+        using var settings = new EnvironmentSettings();
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/not-a-route");
+        request.Headers.TryAddWithoutValidation("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+
+        using var response = await client.SendAsync(request);
+        using var body = await Check(response, HttpStatusCode.NotFound, "resource.not_found");
+        Assert.Equal("4bf92f3577b34da6a3ce929d0e0e4736", body.RootElement.GetProperty("traceId").GetString());
+    }
+
     [Theory]
     [InlineData("/openapi/v1.json")]
     [InlineData("/scalar/v1")]

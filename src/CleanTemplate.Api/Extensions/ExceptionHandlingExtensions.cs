@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CleanTemplate.Api.ExceptionHandling;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -25,7 +26,7 @@ public static class ExceptionHandlingExtensions
                 >= 500 => "server.error",
                 _ => "request.error"
             };
-            context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+            context.ProblemDetails.Extensions["traceId"] = Activity.Current?.TraceId.ToString() ?? context.HttpContext.TraceIdentifier;
         });
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);

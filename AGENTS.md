@@ -4,6 +4,8 @@ Startup configuration policy: LocalJwt access 1–1440 minutes, refresh and abso
 
 Traffic policy: forwarded headers precede the IP-only local per-process limiter, which precedes authentication/provisioning. Preserve anonymous probe exemptions and real 401/403/429 contracts. Loopback is trusted by framework default; configure only actual trusted ingress sources, sanitize headers, preserve the one-hop default and never silently trust all. Aggregate quotas and verified-client limits belong to a separately operated ingress, not this template. Document TLS termination and the remaining pre-limiter costs.
 
+Observability policy: preserve HTTP-only trace minimization and correlation, stdout JSON and low-cardinality metrics; additional instrumentation requires privacy review. Privilege audit is best-effort EF-tracked assignment changes, not complete effective-privilege history. Operators own backend retention and access; example rules and boundaries are in `docs/observability/operations.md`. Never log secrets or direct PII.
+
 Guidelines for AI coding agents working in this repository.
 
 ---

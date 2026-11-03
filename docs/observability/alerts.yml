@@ -1,0 +1,28 @@
+groups:
+  - name: cleantemplate-example
+    interval: 1m
+    rules:
+      - alert: CleanTemplateRefreshReplay
+        expr: sum by (job, service_name) (increase(security_refresh_replay_total{job="cleantemplate",service_name="CleanTemplate.Host"}[10m])) > 0
+        labels: {severity: warning}
+        annotations: {summary: "Refresh reuse detected; investigate client concurrency and compromise"}
+      - alert: CleanTemplateProvisioningRejected
+        expr: sum by (job, service_name) (increase(security_provisioning_rejected_total{job="cleantemplate",service_name="CleanTemplate.Host"}[10m])) > 5
+        labels: {severity: warning}
+        annotations: {summary: "Elevated provisioning rejections"}
+      - alert: CleanTemplateProvisioningContention
+        expr: sum by (job, service_name) (increase(security_provisioning_contention_total{job="cleantemplate",service_name="CleanTemplate.Host"}[10m])) > 3
+        labels: {severity: warning}
+        annotations: {summary: "Elevated provisioning contention attempts"}
+      - alert: CleanTemplateCleanupFailure
+        expr: sum by (job, service_name) (increase(security_cleanup_failure_total{job="cleantemplate",service_name="CleanTemplate.Host"}[10m])) > 0
+        labels: {severity: warning}
+        annotations: {summary: "Refresh token cleanup failed"}
+      - alert: CleanTemplatePrivilegeChange
+        expr: sum by (job, service_name) (increase(security_privilege_committed_total{job="cleantemplate",service_name="CleanTemplate.Host"}[10m])) > 0
+        labels: {severity: info}
+        annotations: {summary: "Committed privilege assignment change; review audit stream"}
+      - alert: CleanTemplateBusinessHttpErrors
+        expr: sum by (job, service_name) (increase(cleantemplate_http_errors_total{job="cleantemplate",service_name="CleanTemplate.Host",route!~"/health|/health/live|/health/ready"}[10m])) > 5
+        labels: {severity: warning}
+        annotations: {summary: "Elevated non-probe HTTP server errors"}

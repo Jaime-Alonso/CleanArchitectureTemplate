@@ -2,11 +2,74 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Reflection;
+using System.Text.Json;
 
 namespace CleanTemplate.Api.IntegrationTests.Infrastructure;
 
 public sealed class StartupProcessTests
 {
+    [Fact]
+    public async Task OwnedStdoutIsJsonAndDoesNotContainRequestValues()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        var info = CreateIsolatedStartInfo();
+        info.Environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}";
+        using var host = Process.Start(info)!;
+        var stdout = host.StandardOutput.ReadToEndAsync();
+        var stderr = host.StandardError.ReadToEndAsync();
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var ready = false;
+            while (!timeout.IsCancellationRequested && !host.HasExited)
+            {
+                try
+                {
+                    using var response = await client.GetAsync($"http://127.0.0.1:{port}/health/ready", timeout.Token);
+                    if (response.IsSuccessStatusCode) { ready = true; break; }
+                }
+                catch (HttpRequestException) { }
+                await Task.Delay(200, timeout.Token);
+            }
+            Assert.True(ready, "Host did not become ready");
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}/CANARY_PATH?x=CANARY_QUERY");
+            request.Headers.TryAddWithoutValidation("Authorization", "Bearer CANARY_AUTH");
+            request.Headers.TryAddWithoutValidation("traceparent", "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01");
+            request.Content = new StringContent("CANARY_BODY");
+            using var result = await client.SendAsync(request, timeout.Token);
+        }
+        finally
+        {
+            await StopAsync(host);
+        }
+        var output = await stdout;
+        _ = await stderr;
+        Assert.DoesNotContain("CANARY_", output);
+        var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
+        var found = false;
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            using var json = JsonDocument.Parse(line);
+            var root = json.RootElement;
+            var properties = root.GetProperty("Properties");
+            Assert.Equal(version, properties.GetProperty("ServiceVersion").GetString());
+            if (root.GetProperty("MessageTemplate").GetString()!.StartsWith("HTTP request {Outcome}", StringComparison.Ordinal)
+                && properties.TryGetProperty("TraceId", out var trace) && trace.GetString() == "0123456789abcdef0123456789abcdef")
+            {
+                Assert.Equal("unmatched", properties.GetProperty("Route").GetString());
+                Assert.False(string.IsNullOrEmpty(properties.GetProperty("SpanId").GetString()));
+                found = true;
+            }
+        }
+        Assert.True(found, "No correlated completion event");
+    }
+
     [Theory]
     [InlineData("Auth__Schemes__LocalJwt__AccessTokenMinutes", "not-a-number", "Auth:Schemes:LocalJwt:AccessTokenMinutes")]
     [InlineData("ForwardedHeaders__KnownProxies__0", "http://secret.invalid", "ForwardedHeaders:KnownProxies")]

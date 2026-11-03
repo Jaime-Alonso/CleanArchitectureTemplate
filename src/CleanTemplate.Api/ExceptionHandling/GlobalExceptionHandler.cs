@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CleanTemplate.Domain.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
@@ -13,7 +14,7 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         if (httpContext.Response.HasStarted || httpContext.RequestAborted.IsCancellationRequested)
             return false;
 
-        logger.LogError("Request {TraceId} failed with {ExceptionType}", httpContext.TraceIdentifier, exception.GetType().Name);
+        logger.LogError("Request {TraceId} failed with {ExceptionType}", Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier, exception.GetType().Name);
         var status = exception switch
         {
             DomainValidationException => StatusCodes.Status400BadRequest,

@@ -1,0 +1,64 @@
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'security_refresh_replay_total{job="cleantemplate",service_name="CleanTemplate.Host"}'
+        values: '0+0x10'
+      - series: 'security_refresh_replay_total{job="other",service_name="CleanTemplate.Host"}'
+        values: '0+2x10'
+      - series: 'cleantemplate_http_errors_total{job="cleantemplate",service_name="CleanTemplate.Host",route="/health/ready"}'
+        values: '0+2x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CleanTemplateRefreshReplay
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: CleanTemplateBusinessHttpErrors
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: 'security_refresh_replay_total{job="cleantemplate",service_name="CleanTemplate.Host"}'
+        values: '0+1x10'
+      - series: 'security_provisioning_rejected_total{job="cleantemplate",service_name="CleanTemplate.Host"}'
+        values: '0+1x10'
+      - series: 'security_provisioning_contention_total{job="cleantemplate",service_name="CleanTemplate.Host"}'
+        values: '0+1x10'
+      - series: 'security_cleanup_failure_total{job="cleantemplate",service_name="CleanTemplate.Host"}'
+        values: '0+1x10'
+      - series: 'security_privilege_committed_total{job="cleantemplate",service_name="CleanTemplate.Host",source="manual",change="grant"}'
+        values: '0+1x10'
+      - series: 'cleantemplate_http_errors_total{job="cleantemplate",service_name="CleanTemplate.Host",route="/products"}'
+        values: '0+1x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CleanTemplateRefreshReplay
+        exp_alerts:
+          - exp_labels: {job: cleantemplate, service_name: CleanTemplate.Host, severity: warning}
+            exp_annotations: {summary: "Refresh reuse detected; investigate client concurrency and compromise"}
+      - eval_time: 10m
+        alertname: CleanTemplateProvisioningRejected
+        exp_alerts:
+          - exp_labels: {job: cleantemplate, service_name: CleanTemplate.Host, severity: warning}
+            exp_annotations: {summary: "Elevated provisioning rejections"}
+      - eval_time: 10m
+        alertname: CleanTemplateProvisioningContention
+        exp_alerts:
+          - exp_labels: {job: cleantemplate, service_name: CleanTemplate.Host, severity: warning}
+            exp_annotations: {summary: "Elevated provisioning contention attempts"}
+      - eval_time: 10m
+        alertname: CleanTemplateCleanupFailure
+        exp_alerts:
+          - exp_labels: {job: cleantemplate, service_name: CleanTemplate.Host, severity: warning}
+            exp_annotations: {summary: "Refresh token cleanup failed"}
+      - eval_time: 10m
+        alertname: CleanTemplatePrivilegeChange
+        exp_alerts:
+          - exp_labels: {job: cleantemplate, service_name: CleanTemplate.Host, severity: info}
+            exp_annotations: {summary: "Committed privilege assignment change; review audit stream"}
+      - eval_time: 10m
+        alertname: CleanTemplateBusinessHttpErrors
+        exp_alerts:
+          - exp_labels: {job: cleantemplate, service_name: CleanTemplate.Host, severity: warning}
+            exp_annotations: {summary: "Elevated non-probe HTTP server errors"}

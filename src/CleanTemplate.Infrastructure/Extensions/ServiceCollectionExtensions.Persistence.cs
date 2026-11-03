@@ -3,6 +3,7 @@ using CleanTemplate.Infrastructure.Database;
 using CleanTemplate.Infrastructure.Persistence;
 using CleanTemplate.Infrastructure.Repositories.Reads;
 using CleanTemplate.Infrastructure.Repositories.Writes;
+using CleanTemplate.Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -36,8 +37,12 @@ public static partial class ServiceCollectionExtensions
             });
         }
 
+        services.AddScoped<PrivilegeAuditState>();
+        services.AddScoped<PrivilegeSaveInterceptor>();
+        services.AddScoped<PrivilegeTransactionInterceptor>();
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
+            options.AddInterceptors(sp.GetRequiredService<PrivilegeSaveInterceptor>(), sp.GetRequiredService<PrivilegeTransactionInterceptor>());
             switch (provider)
             {
                 case DatabaseProvider.SqlServer:

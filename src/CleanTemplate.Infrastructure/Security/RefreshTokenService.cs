@@ -81,6 +81,7 @@ public sealed class RefreshTokenService : IRefreshTokenService
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (entity.ReplacedByTokenHash is not null)
         {
+            SecurityMetrics.RecordReplay();
             await RevokeFamilyAsync(familyId, "ReuseDetected", now, cancellationToken).ConfigureAwait(false);
             return null;
         }
@@ -157,6 +158,7 @@ public sealed class RefreshTokenService : IRefreshTokenService
                 .AnyAsync(x => x.TokenHash == tokenHash && x.ReplacedByTokenHash != null, cancellationToken).ConfigureAwait(false);
             if (replay)
             {
+                SecurityMetrics.RecordReplay();
                 await RevokeFamilyAsync(familyId, "ReuseDetected", now, cancellationToken).ConfigureAwait(false);
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             }

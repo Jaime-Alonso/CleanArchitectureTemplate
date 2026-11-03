@@ -22,17 +22,18 @@ internal sealed class IdentitySecurityFixture(SqliteConnection connection, Servi
     public IAuthUserService AuthUsers => scope.ServiceProvider.GetRequiredService<IAuthUserService>();
     public ManualTimeProvider Clock => scope.ServiceProvider.GetRequiredService<ManualTimeProvider>();
 
-    public static async Task<IdentitySecurityFixture> CreateAsync(ExternalRoleMappingOptions? mapping = null, IInterceptor? interceptor = null)
+    public static async Task<IdentitySecurityFixture> CreateAsync(ExternalRoleMappingOptions? mapping = null, IInterceptor? interceptor = null, string? sharedConnectionString = null)
     {
-        var connection = new SqliteConnection("Data Source=:memory:");
+        var connection = new SqliteConnection(sharedConnectionString ?? "Data Source=:memory:");
         await connection.OpenAsync();
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<ManualTimeProvider>();
-        services.AddSingleton<TimeProvider>(provider => provider.GetRequiredService<ManualTimeProvider>());
+        services.AddSingleton<TimeProvider>(provider => sharedConnectionString is null ? provider.GetRequiredService<ManualTimeProvider>() : TimeProvider.System);
         services.AddDbContext<ApplicationDbContext>(options =>
         {
-            options.UseSqlite(connection);
+            if (sharedConnectionString is null) options.UseSqlite(connection);
+            else options.UseSqlite(sharedConnectionString);
             if (interceptor is not null)
             {
                 options.AddInterceptors(interceptor);

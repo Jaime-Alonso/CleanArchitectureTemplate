@@ -1,3 +1,4 @@
+using System.Reflection;
 using CleanTemplate.Crosscutting.Networking;
 using CleanTemplate.Crosscutting.Observability;
 using Microsoft.AspNetCore.Builder;
@@ -7,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using OpenTelemetry;
+using OpenTelemetry.Trace;
 
 namespace CleanTemplate.Api.IntegrationTests.Infrastructure;
 
@@ -100,7 +103,6 @@ public sealed class NetworkingTelemetryConfigurationTests
     [InlineData("OpenTelemetry:Otlp:Protocol", "")]
     [InlineData("OpenTelemetry:Otlp:Protocol", "secret-invalid")]
     [InlineData("OpenTelemetry:ServiceName", "")]
-    [InlineData("OpenTelemetry:ServiceVersion", "")]
     [InlineData("OpenTelemetry:Traces:SamplingRatio", "NaN")]
     [InlineData("OpenTelemetry:Traces:SamplingRatio", "Infinity")]
     [InlineData("OpenTelemetry:Traces:SamplingRatio", "-0.1")]
@@ -109,7 +111,7 @@ public sealed class NetworkingTelemetryConfigurationTests
     public void InvalidTelemetryFailsWithoutValues(string key, string value)
     {
         var config = Config(new() { ["OpenTelemetry:Traces:Enabled"] = "true", [key] = value });
-        var error = Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddOpenTelemetryObservability(config, new TestEnvironment()));
+        var error = Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddOpenTelemetryObservability(config, new TestEnvironment(), "test-version"));
         Assert.Contains(key, error.Message);
         Assert.DoesNotContain("secret-invalid", error.Message);
     }
@@ -121,15 +123,28 @@ public sealed class NetworkingTelemetryConfigurationTests
     public void ValidTelemetryIsAccepted(string protocol, string ratio)
     {
         var config = Config(new() { ["OpenTelemetry:Traces:Enabled"] = "true", ["OpenTelemetry:Otlp:Protocol"] = protocol, ["OpenTelemetry:Traces:SamplingRatio"] = ratio, ["OpenTelemetry:Otlp:Endpoint"] = "https://example.com:4317" });
-        new ServiceCollection().AddOpenTelemetryObservability(config, new TestEnvironment());
+        new ServiceCollection().AddOpenTelemetryObservability(config, new TestEnvironment(), "test-version");
+    }
+
+    [Fact]
+    public void TracerResourceContainsHostArtifactVersion()
+    {
+        var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOpenTelemetryObservability(Config("OpenTelemetry:Traces:Enabled", "true"), new TestEnvironment(), version);
+        using var provider = services.BuildServiceProvider();
+        var resource = provider.GetRequiredService<TracerProvider>().GetResource();
+        Assert.Equal(version, resource.Attributes.Single(a => a.Key == "service.version").Value);
     }
 
     [Fact]
     public void DisabledCapabilitiesDoNotValidateTheirSettings()
     {
         var config = Config(new() { ["OpenTelemetry:Metrics:Enabled"] = "true", ["OpenTelemetry:Traces:SamplingRatio"] = "not-a-number" });
-        new ServiceCollection().AddOpenTelemetryObservability(config, new TestEnvironment());
-        new ServiceCollection().AddOpenTelemetryObservability(Config("OpenTelemetry:Otlp:Endpoint", "invalid"), new TestEnvironment());
+        new ServiceCollection().AddOpenTelemetryObservability(config, new TestEnvironment(), "test-version");
+        new ServiceCollection().AddOpenTelemetryObservability(Config("OpenTelemetry:Otlp:Endpoint", "invalid"), new TestEnvironment(), "test-version");
     }
 
     private static IConfiguration Config(string key, string value) => Config(new() { [key] = value });

@@ -1,3 +1,4 @@
+using System.Reflection;
 using CleanTemplate.Api.Endpoints;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Api.Security.Extensions;
@@ -6,13 +7,18 @@ using CleanTemplate.Crosscutting.Networking;
 using CleanTemplate.Crosscutting.Observability;
 using CleanTemplate.Crosscutting.RateLimiting;
 using CleanTemplate.Host.Extensions;
+using CleanTemplate.Host.Observability;
 using CleanTemplate.Infrastructure.Extensions;
 using CleanTemplate.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Serilog.Formatting.Json;
 
+var artifactVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+    ?? typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
 Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
+    .Enrich.WithProperty("ServiceVersion", artifactVersion)
+    .WriteTo.Console(new JsonFormatter())
     .CreateBootstrapLogger();
 
 try
@@ -25,6 +31,12 @@ try
     if (args.Any(a => a.StartsWith("--operation", StringComparison.Ordinal)))
         throw new InvalidOperationException("Unsupported operation.");
     var builder = WebApplication.CreateBuilder(operation is "migrate" or "bootstrap-admin" ? [] : args);
+
+    builder.Host.UseSerilog((context, config) =>
+        config.ReadFrom.Configuration(context.Configuration)
+            .Enrich.With<ActivityEnricher>()
+            .Enrich.WithProperty("ServiceVersion", artifactVersion)
+            .WriteTo.Console(new JsonFormatter()));
 
     var ephemeralOptIn = builder.Configuration["Database:AllowEphemeralInProduction"];
     if (ephemeralOptIn is not null && !bool.TryParse(ephemeralOptIn, out _))
@@ -56,9 +68,6 @@ try
 
     builder.Services.AddSingleton(TimeProvider.System);
 
-    builder.Host.UseSerilog((context, config) =>
-        config.ReadFrom.Configuration(context.Configuration));
-
     var apiVersioningBuilder = builder.Services.AddApiVersioningConfiguration();
     builder.Services.AddApiContract(apiVersioningBuilder);
     builder.Services.AddGlobalErrorHandling();
@@ -69,7 +78,7 @@ try
     ConfigureSafely("Cors", () => builder.Services.AddApiCors(builder.Configuration));
     ConfigureSafely("ForwardedHeaders:KnownProxies/Networks", () => builder.Services.AddForwardedHeadersSupport(builder.Configuration));
     ConfigureSafely("RateLimiting", () => builder.Services.AddApiRateLimiting(builder.Configuration));
-    ConfigureSafely("OpenTelemetry", () => builder.Services.AddOpenTelemetryObservability(builder.Configuration, builder.Environment));
+    ConfigureSafely("OpenTelemetry", () => builder.Services.AddOpenTelemetryObservability(builder.Configuration, builder.Environment, artifactVersion));
     ConfigureSafely("HealthChecks", () => builder.Services.AddOperationalHealthChecks(builder.Configuration));
 
     builder.Services.ValidateRequestValidationConfiguration();
@@ -85,15 +94,8 @@ try
 
     await app.Services.InitializeIdentityAsync(app.Lifetime.ApplicationStopping);
 
+    app.UseMiddleware<RequestObservabilityMiddleware>();
     app.UseGlobalErrorHandling();
-    app.UseSerilogRequestLogging(options =>
-    {
-        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
-        {
-            diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
-            diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
-        };
-    });
 
     if (app.Environment.IsDevelopment())
     {

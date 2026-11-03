@@ -1,13 +1,60 @@
+using System.Diagnostics.Metrics;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;
 using CleanTemplate.Infrastructure.Tests.Testing;
+using CleanTemplate.SharedKernel.Errors;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace CleanTemplate.Infrastructure.Tests.Security;
 
+[Collection("Privilege audit")]
 public sealed class ExternalIdentityProvisioningServiceTests
 {
+    [Fact]
+    public async Task LockedDatabase_RecordsContentionAndReturnsConflict()
+    {
+        var records = new List<(long Value, KeyValuePair<string, object?>[] Tags)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) => { if (instrument.Meter.Name == "CleanTemplate.Security" && instrument.Name == "security.provisioning.contention") l.EnableMeasurementEvents(instrument); };
+        listener.SetMeasurementEventCallback<long>((_, value, tags, _) => records.Add((value, tags.ToArray())));
+        listener.Start();
+        var connectionString = $"Data Source=provision-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Default Timeout=1";
+        await using var fixture = await IdentitySecurityFixture.CreateAsync(sharedConnectionString: connectionString);
+        await using var blocker = new SqliteConnection(connectionString);
+        await blocker.OpenAsync();
+        await using var transaction = await blocker.BeginTransactionAsync();
+        try
+        {
+            await using var command = blocker.CreateCommand();
+            command.Transaction = (SqliteTransaction)transaction;
+            command.CommandText = "UPDATE AspNetRoles SET Name = Name";
+            await command.ExecuteNonQueryAsync();
+            var result = await fixture.Provisioner.ProvisionAsync(Identity());
+            Assert.True(result.IsFailure);
+            Assert.Equal(ErrorType.Conflict, result.FirstError?.Type);
+            Assert.Equal("Auth.ExternalProvisioningConflict", result.FirstError?.Code);
+            Assert.Equal(3, records.Count);
+            Assert.All(records, record => { Assert.True(record.Value > 0); Assert.Empty(record.Tags); });
+        }
+        finally { await transaction.RollbackAsync(); }
+    }
+
+    [Fact]
+    public async Task RejectedProvisioning_RecordsLowCardinalityMetric()
+    {
+        var records = new List<(string Name, KeyValuePair<string, object?>[] Tags)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) => { if (instrument.Meter.Name == "CleanTemplate.Security") l.EnableMeasurementEvents(instrument); };
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) => records.Add((instrument.Name, tags.ToArray())));
+        listener.Start();
+        await using var fixture = await IdentitySecurityFixture.CreateAsync();
+        var result = await fixture.Provisioner.ProvisionAsync(Identity() with { EmailVerified = false });
+        Assert.True(result.IsFailure);
+        Assert.Empty(Assert.Single(records, r => r.Name == "security.provisioning.rejected").Tags);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

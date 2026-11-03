@@ -55,12 +55,7 @@ public static class RateLimitingExtensions
                     .GetRequiredService<ILoggerFactory>()
                     .CreateLogger("RateLimiting");
 
-                logger.LogWarning(
-                    "Rate limit exceeded for {Method} {Path}. Client {ClientIp}. Retry-After {RetryAfterSeconds}s",
-                    context.HttpContext.Request.Method,
-                    context.HttpContext.Request.Path,
-                    GetPartitionKey(context.HttpContext),
-                    context.HttpContext.Response.Headers.RetryAfter.ToString());
+                logger.LogWarning("Rate limit exceeded.");
 
                 return ValueTask.CompletedTask;
             };

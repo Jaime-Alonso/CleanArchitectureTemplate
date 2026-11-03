@@ -42,10 +42,13 @@ public sealed class ExternalIdentityProvisioningService(
                 {
                     return result;
                 }
+
+                SecurityMetrics.RecordContention();
             }
             catch (Exception exception) when (IsRetryable(exception))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                SecurityMetrics.RecordContention();
                 // Known rollback/uniqueness conflicts only; do not retry ambiguous connection/commit failures.
                 logger.LogWarning("External provisioning database contention. Attempt {Attempt} of {MaxAttempts}", attempt, MaxAttempts);
             }
