@@ -6,6 +6,8 @@ Traffic policy: forwarded headers precede the IP-only local per-process limiter,
 
 Observability policy: preserve HTTP-only trace minimization and correlation, stdout JSON and low-cardinality metrics; additional instrumentation requires privacy review. Privilege audit is best-effort EF-tracked assignment changes, not complete effective-privilege history. Operators own backend retention and access; example rules and boundaries are in `docs/observability/operations.md`. Never log secrets or direct PII.
 
+Resilience policy: follow `docs/recovery/operations.md`; operators own encrypted backups, keys, retention, restore drills and RPO/RTO. Permission failures fail closed, not via Redis or token roles. Cache factories must be read-only/idempotent; no automatic retries of ambiguous writes or refresh rotations. Shutdown and readiness timeouts are cooperative; await scoped operations before disposal. Cleanup's separate deletes are not an atomic unit.
+
 Guidelines for AI coding agents working in this repository.
 
 ---

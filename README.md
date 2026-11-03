@@ -10,6 +10,10 @@ The template is designed to be:
 
 ---
 
+## Recovery and resilience
+
+The operator owns encrypted backups, separate key and server-level identity recovery, restore drills, retention and RPO/RTO decisions. See [recovery operations](docs/recovery/operations.md) for proposed budgets, cooperative shutdown, cache failures and the isolated drill's evidence and limits. Redis is not a permission fallback; cache factories must be read-only/idempotent because concurrent or repeated attempts can run them again. Do not automatically retry ambiguous writes or refresh rotation.
+
 ## HTTP error contract
 
 Error responses use `application/problem+json` regardless of the request's `Accept` header, preserving the original HTTP status (`ProblemDetails`, or `ValidationProblemDetails` with an `errors` object for validation and binding failures). They include the HTTP `status`, a stable `code`, and a request-specific `traceId`. Validation keys identify fields when available; the empty key denotes an unassociated error. Messages are deliberately generic except for explicit, safe endpoint validation messages. JSON binding paths use JSON property names; Application validation uses its property names. Unauthorized Result, login, and refresh failures include a `WWW-Authenticate: Bearer` challenge without exposing token failure details.

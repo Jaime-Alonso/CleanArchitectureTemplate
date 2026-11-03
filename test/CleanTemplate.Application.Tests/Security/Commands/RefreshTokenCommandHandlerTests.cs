@@ -120,11 +120,50 @@ public sealed class RefreshTokenCommandHandlerTests
         Assert.Equal(0, refresh.IssueCalls);
     }
 
+    [Fact]
+    public async Task Handle_WhenRoleLookupFails_DoesNotGenerateOrRotate()
+    {
+        var userId = Guid.NewGuid();
+        var refresh = new FakeRefreshTokenService { ConsumeResult = new RefreshTokenConsumptionResult { UserId = userId } };
+        var generator = new FakeTokenGenerator();
+        var handler = new RefreshTokenCommandHandler(
+            new FakeAuthUserService { User = new AuthUser { Id = userId }, FailRoles = true },
+            generator, refresh, NullLogger<RefreshTokenCommandHandler>.Instance);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(
+            new RefreshTokenCommand { RefreshToken = "valid-token" }, CancellationToken.None));
+
+        Assert.Equal(0, generator.Calls);
+        Assert.False(refresh.RotationCalled);
+        Assert.Equal(0, refresh.IssueCalls);
+    }
+
+    [Fact]
+    public async Task Handle_WhenRotationOutcomeIsAmbiguous_DoesNotRetryOrReturnTokens()
+    {
+        var userId = Guid.NewGuid();
+        var refresh = new FakeRefreshTokenService
+        {
+            ConsumeResult = new RefreshTokenConsumptionResult { UserId = userId },
+            FailRotation = true
+        };
+        var handler = new RefreshTokenCommandHandler(
+            new FakeAuthUserService { User = new AuthUser { Id = userId } },
+            new FakeTokenGenerator(), refresh, NullLogger<RefreshTokenCommandHandler>.Instance);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(
+            new RefreshTokenCommand { RefreshToken = "valid-token" }, CancellationToken.None));
+
+        Assert.Equal(1, refresh.RotationCalls);
+        Assert.Equal(0, refresh.IssueCalls);
+    }
+
     private sealed class FakeAuthUserService : IAuthUserService
     {
         public AuthUser? User { get; set; }
         public bool IsLockedOutResult { get; set; }
         public IReadOnlyCollection<string> Roles { get; set; } = [];
+        public bool FailRoles { get; set; }
 
         public Task<AuthUser?> FindByEmailOrUserNameAsync(string emailOrUserName, CancellationToken cancellationToken = default)
             => Task.FromResult(User);
@@ -145,15 +184,17 @@ public sealed class RefreshTokenCommandHandlerTests
             => Task.CompletedTask;
 
         public Task<IReadOnlyCollection<string>> GetRolesAsync(Guid userId, CancellationToken cancellationToken = default)
-            => Task.FromResult(Roles);
+            => FailRoles ? Task.FromException<IReadOnlyCollection<string>>(new InvalidOperationException("Injected role lookup failure.")) : Task.FromResult(Roles);
     }
 
     private sealed class FakeTokenGenerator : ILocalJwtTokenGenerator
     {
         public bool Fail { get; init; }
+        public int Calls { get; private set; }
 
         public LocalTokenResult Generate(AuthUser user, IReadOnlyCollection<string> roles)
         {
+            Calls++;
             if (Fail)
                 throw new InvalidOperationException("Injected signing failure.");
 
@@ -176,6 +217,8 @@ public sealed class RefreshTokenCommandHandlerTests
         }
         public RefreshTokenConsumptionResult? ConsumeResult { get; set; }
         public bool RejectRotation { get; set; }
+        public bool FailRotation { get; set; }
+        public int RotationCalls { get; private set; }
         public bool RotationCalled { get; private set; }
         public (string Token, Guid UserId, string JwtId, string? Ip)? LastRotation { get; private set; }
         public int IssueCalls { get; private set; }
@@ -193,6 +236,9 @@ public sealed class RefreshTokenCommandHandlerTests
         public Task<RefreshTokenIssueResult?> RotateAsync(string refreshToken, Guid userId, string jwtId, string? createdByIp, CancellationToken cancellationToken = default)
         {
             RotationCalled = true;
+            RotationCalls++;
+            if (FailRotation)
+                throw new InvalidOperationException("Injected ambiguous rotation outcome.");
             LastRotation = (refreshToken, userId, jwtId, createdByIp);
             return Task.FromResult<RefreshTokenIssueResult?>(RejectRotation ? null : new RefreshTokenIssueResult
             {

@@ -9,6 +9,8 @@ Preserve the observability and privacy boundaries in `docs/observability/operati
 
 Liveness must not depend on external services. Readiness timeouts are cooperative: propagate cancellation and provider timeouts; never use `WaitAsync` to abandon checks holding scoped resources or promise a hard deadline for uncooperative providers.
 
+Follow `docs/recovery/operations.md`: operators own encrypted backups, keys, retention, restore drills and RPO/RTO. Permission failures fail closed, without Redis or token-role fallback. Cache factories must be read-only/idempotent; never automatically retry ambiguous writes or refresh rotations. Await scoped operations before disposal; cleanup's separate deletes are not atomic.
+
 Preserve IP-only per-process limiting after trusted forwarded headers and before authentication/provisioning; probes remain anonymous and exempt. Loopback is trusted by default and forwarding is one hop. Aggregate and verified-client quotas require an independently operated ingress; do not trust incoming claims or imply a distributed limiter. Follow the README TLS and proxy guidance.
 
 Create a new feature use case with consistent structure across Application, Api, and tests.
