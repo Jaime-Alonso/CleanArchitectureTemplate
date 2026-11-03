@@ -105,8 +105,8 @@ try
     app.UseCors(CleanTemplate.Crosscutting.Networking.Options.ApiCorsOptions.PolicyName);
     app.UseHttpsRedirection();
 
-    app.UseAuthentication();
     app.UseRateLimiter();
+    app.UseAuthentication();
     app.UseAuthorization();
 
     app.MapAuthEndpoints();

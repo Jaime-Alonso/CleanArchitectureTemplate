@@ -2,6 +2,8 @@
 
 Startup configuration policy: LocalJwt access 1–1440 minutes, refresh and absolute session 1–90 days; active key IDs are required and rotated IDs unique. Rate limiting fixed windows are 1–4294967 seconds. Validate only enabled auth capabilities and never log configuration values or arbitrary exception messages. OIDC authority is HTTPS without userinfo/query/fragment; provisioning email/domain rules must be well formed, default roles are internal Admin/User while external role names are unrestricted. Production SQLite in-memory requires explicit strict boolean `Database:AllowEphemeralInProduction=true`, initializes schema without auto-admin, and loses data on restart. SQLite initialization is restricted to Development/Testing or opted-in Production, not Staging. Readiness checks connectivity, not schema. Keep the process-level startup secret and opt-in tests.
 
+Traffic policy: forwarded headers precede the IP-only local per-process limiter, which precedes authentication/provisioning. Preserve anonymous probe exemptions and real 401/403/429 contracts. Loopback is trusted by framework default; configure only actual trusted ingress sources, sanitize headers, preserve the one-hop default and never silently trust all. Aggregate quotas and verified-client limits belong to a separately operated ingress, not this template. Document TLS termination and the remaining pre-limiter costs.
+
 Guidelines for AI coding agents working in this repository.
 
 ---

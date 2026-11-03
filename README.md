@@ -461,7 +461,7 @@ The template ships with a placeholder password. The ephemeral initializer requir
 
 The API includes built-in ASP.NET Core rate limiting with two layers:
 
-- **Global soft limit** applied to all requests.
+- **Global soft limit** applied to requests that reach the limiter; probes are explicitly exempt.
 - **Strict endpoint policies** for authentication endpoints:
   - `POST /auth/login`
   - `POST /auth/refresh`
@@ -469,7 +469,9 @@ The API includes built-in ASP.NET Core rate limiting with two layers:
 
 Configuration is under `RateLimiting` in `CleanTemplate.Host/appsettings*.json`.
 
-When deployed behind a reverse proxy/load balancer, configure trusted proxy sources under `ForwardedHeaders` (`KnownProxies` / `KnownNetworks`). The template does not trust raw `X-Forwarded-For` unless the source proxy/network is explicitly configured.
+When deployed behind a reverse proxy/load balancer, configure its actual source addresses under `ForwardedHeaders` (`KnownProxies` / `KnownNetworks`). ASP.NET Core's default loopback trust remains in place even when these lists are empty: local processes can supply forwarded headers. Other peers are untrusted unless configured. Never use broad CIDRs such as `0.0.0.0/0` or `::/0`, or enable a hosting configuration that trusts all proxies, unless the network boundary independently prevents untrusted access. Restrict direct access to the application and make the trusted ingress remove client-supplied forwarding headers and write its own.
+
+The framework default `ForwardLimit` is **one**, processed from right to left: with multiple hops the app sees the nearest forwarded address, not necessarily the original client. This template does not expose a hop-count setting. Configure the last trusted ingress to present a sanitized single client address and scheme, or explicitly design and test a different proxy chain before changing code. Otherwise clients may share a proxy's quota. Both IPv4 and IPv6 CIDRs are supported; review real source addresses, IPv4-mapped IPv6 and network changes. A missing remote address shares the `unknown` partition.
 
 Default production values (`appsettings.json`):
 
@@ -481,12 +483,15 @@ Default production values (`appsettings.json`):
 When a limit is exceeded, the API returns:
 
 - `429 Too Many Requests`
-- `Retry-After` header
+- `Retry-After` header when supplied by the limiter
 
 Implementation notes:
 
-- Partitioning key uses the resolved remote client IP (`HttpContext.Connection.RemoteIpAddress`).
-- Rate limiting is in-memory per application instance. In multi-instance deployments, limits are enforced per replica.
+- Partitioning is exclusively by resolved remote IP (`HttpContext.Connection.RemoteIpAddress`), never by a supplied user/client claim. NAT users share a quota; clients with multiple addresses can spread traffic. The global and named fixed windows apply together; 429 may precede a 401/403. `Retry-After` is included when the limiter supplies it.
+- The pipeline resolves trusted forwarded headers, CORS and HTTPS redirection before rate limiting; authentication, claims transformation/provisioning and authorization follow it. Thus rejected limited requests avoid those authentication costs, but routing, TLS, redirects, CORS and other earlier work still cost resources. Early routing/version errors, CORS preflight responses and HTTP redirects can complete before the limiter. Anonymous health probes bypass the app limiter, not HTTPS redirection. Monitoring requests should omit credentials: anonymous endpoint metadata does not disable authentication middleware when a bearer token is supplied. Restrict the probe paths at the ingress/network boundary and strip unnecessary credentials from monitoring traffic.
+- Limits are in memory **per process**, reset on restart, and are not coordinated across replicas. More replicas or uneven load change effective capacity; fixed windows permit boundary bursts. They are defense in depth, not aggregate quotas or DDoS protection.
+- The deployment operator owns an independently provisioned ingress/gateway/WAF: enforce aggregate network and request quotas across replicas, connection/body/time limits and abuse controls there; protect direct origin access and monitoring paths. Any user/client quota must use an identity verified by that gateway, not an unvalidated claim or forwarded header. No gateway or distributed limiter is supplied by this template; validate its actual consistency, failure mode and limits under load before deployment.
+- Choose TLS termination explicitly: prefer HTTPS to the ingress and either TLS on the internal hop or a deliberately isolated trusted network. Correct trusted `X-Forwarded-Proto` is necessary for HTTPS redirection and HTTPS probes behind termination; untrusted headers cannot set the scheme. Plaintext probe exceptions require a deployment-level decision, not a presumed app exemption.
 
 ### OpenTelemetry (OTLP)
 

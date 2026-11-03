@@ -10,6 +10,8 @@ metadata:
 ## Purpose
 Liveness must not depend on external services. Readiness timeouts are cooperative: propagate cancellation and provider timeouts; never use `WaitAsync` to abandon checks holding scoped resources or promise a hard deadline for uncooperative providers.
 
+Preserve IP-only per-process limiting after trusted forwarded headers and before authentication/provisioning; probes remain anonymous and exempt. Loopback is trusted by default and forwarding is one hop. Aggregate and verified-client quotas require an independently operated ingress; do not trust incoming claims or imply a distributed limiter. Follow the README TLS and proxy guidance.
+
 Create a new feature use case with consistent structure across Application, Api, and tests.
 
 This skill is intentionally opinionated: it prioritizes practical consistency over strict architecture purism.
