@@ -24,18 +24,24 @@ public static partial class ServiceCollectionExtensions
         services
             .AddOptions<RefreshTokenOptions>()
             .Bind(configuration.GetSection("Auth:Schemes:LocalJwt"))
-            .Validate(options => options.RefreshTokenDays is >= 1 and <= 90 && options.AbsoluteSessionDays is >= 1 and <= 90,
+            .Validate(options => !configuration.GetValue("Auth:Schemes:LocalJwt:Enabled", true) || options.RefreshTokenDays is >= 1 and <= 90 && options.AbsoluteSessionDays is >= 1 and <= 90,
                 "RefreshTokenDays and AbsoluteSessionDays must be between 1 and 90.")
             .ValidateOnStart();
 
         services
             .AddOptions<LocalJwtOptions>()
             .Bind(configuration.GetSection("Auth:Schemes:LocalJwt"))
+            .Validate(options => !options.Enabled || options.AccessTokenMinutes is >= 1 and <= 1440,
+                "Auth:Schemes:LocalJwt:AccessTokenMinutes must be between 1 and 1440.")
             .ValidateOnStart();
 
         services
             .AddOptions<RefreshTokenCleanupOptions>()
             .Bind(configuration.GetSection(RefreshTokenCleanupOptions.SectionName))
+            .Validate(options => !options.Enabled || options.IntervalMinutes is >= 1 and <= 1440,
+                "Auth:RefreshTokenCleanup:IntervalMinutes must be between 1 and 1440 when cleanup is enabled.")
+            .Validate(options => !options.Enabled || options.RevokedRetentionDays is >= 0 and <= 365,
+                "Auth:RefreshTokenCleanup:RevokedRetentionDays must be between 0 and 365 when cleanup is enabled.")
             .ValidateOnStart();
 
         services

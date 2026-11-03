@@ -6,7 +6,6 @@ public sealed class DatabaseProviderParserTests
 {
     [Theory]
     [InlineData(null, DatabaseProvider.PostgreSql)]
-    [InlineData("", DatabaseProvider.PostgreSql)]
     [InlineData("postgres", DatabaseProvider.PostgreSql)]
     [InlineData("postgresql", DatabaseProvider.PostgreSql)]
     [InlineData("sqlserver", DatabaseProvider.SqlServer)]
@@ -21,9 +20,12 @@ public sealed class DatabaseProviderParserTests
         Assert.Equal(expected, result);
     }
 
-    [Fact]
-    public void Parse_WithUnsupportedProvider_ThrowsInvalidOperationException()
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("oracle")]
+    public void Parse_WithUnsupportedProvider_ThrowsInvalidOperationException(string input)
     {
-        Assert.Throws<InvalidOperationException>(() => DatabaseProviderParser.Parse("oracle"));
+        Assert.Throws<InvalidOperationException>(() => DatabaseProviderParser.Parse(input));
     }
 }

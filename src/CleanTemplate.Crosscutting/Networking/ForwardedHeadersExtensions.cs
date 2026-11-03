@@ -16,37 +16,35 @@ public static class ForwardedHeadersExtensions
             .Get<ForwardedHeadersTrustOptions>()
             ?? new ForwardedHeadersTrustOptions();
 
+        var proxies = new List<IPAddress>();
+        foreach (string knownProxy in trustOptions.KnownProxies)
+        {
+            if (string.IsNullOrWhiteSpace(knownProxy) || !IPAddress.TryParse(knownProxy, out IPAddress? proxy))
+                throw new InvalidOperationException("ForwardedHeaders:KnownProxies contains an invalid IP address.");
+            proxies.Add(proxy);
+        }
+
+        var networks = new List<System.Net.IPNetwork>();
+        foreach (string knownNetwork in trustOptions.KnownNetworks)
+        {
+            if (string.IsNullOrWhiteSpace(knownNetwork) || !System.Net.IPNetwork.TryParse(knownNetwork, out var network) ||
+                !IPAddress.TryParse(knownNetwork.Split('/')[0], out IPAddress? address) || !address.Equals(network.BaseAddress))
+                throw new InvalidOperationException("ForwardedHeaders:KnownNetworks contains an invalid CIDR network.");
+            networks.Add(network);
+        }
+
         services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
-            foreach (string knownProxy in trustOptions.KnownProxies)
+            foreach (IPAddress proxy in proxies)
             {
-                if (IPAddress.TryParse(knownProxy, out IPAddress? parsedProxy))
-                {
-                    options.KnownProxies.Add(parsedProxy);
-                }
+                options.KnownProxies.Add(proxy);
             }
 
-            foreach (string knownNetwork in trustOptions.KnownNetworks)
+            foreach (System.Net.IPNetwork network in networks)
             {
-                string[] parts = knownNetwork.Split('/');
-                if (parts.Length != 2)
-                {
-                    continue;
-                }
-
-                if (!IPAddress.TryParse(parts[0], out IPAddress? prefix))
-                {
-                    continue;
-                }
-
-                if (!int.TryParse(parts[1], out int prefixLength))
-                {
-                    continue;
-                }
-
-                options.KnownIPNetworks.Add(new System.Net.IPNetwork(prefix, prefixLength));
+                options.KnownIPNetworks.Add(network);
             }
         });
 

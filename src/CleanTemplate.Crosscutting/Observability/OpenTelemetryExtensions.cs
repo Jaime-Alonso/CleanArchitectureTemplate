@@ -17,29 +17,60 @@ public static class OpenTelemetryExtensions
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        OpenTelemetryOptions options = configuration
-            .GetSection(OpenTelemetryOptions.SectionName)
-            .Get<OpenTelemetryOptions>() ?? new OpenTelemetryOptions();
+        IConfigurationSection section = configuration.GetSection(OpenTelemetryOptions.SectionName);
+        bool tracesEnabled;
+        bool metricsEnabled;
+        try
+        {
+            tracesEnabled = section.GetValue<bool>("Traces:Enabled");
+            metricsEnabled = section.GetValue<bool>("Metrics:Enabled");
+        }
+        catch (InvalidOperationException)
+        {
+            throw new InvalidOperationException("OpenTelemetry:Traces:Enabled and OpenTelemetry:Metrics:Enabled must be booleans.");
+        }
 
-        if (!options.Traces.Enabled && !options.Metrics.Enabled)
+        if (!tracesEnabled && !metricsEnabled)
         {
             return services;
         }
 
-        string serviceName = string.IsNullOrWhiteSpace(options.ServiceName)
-            ? environment.ApplicationName
-            : options.ServiceName;
+        OpenTelemetryOptions options;
+        try
+        {
+            options = new OpenTelemetryOptions
+            {
+                ServiceName = section["ServiceName"] ?? "CleanTemplate.Host",
+                ServiceVersion = section["ServiceVersion"] ?? "1.0.0",
+                Otlp = section.GetSection("Otlp").Get<OpenTelemetryOtlpOptions>() ?? new(),
+                Traces = tracesEnabled ? section.GetSection("Traces").Get<OpenTelemetryTracesOptions>() ?? new() : new(),
+                Metrics = new OpenTelemetryMetricsOptions { Enabled = metricsEnabled }
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            throw new InvalidOperationException("OpenTelemetry:Traces:SamplingRatio must be a valid number.");
+        }
 
-        string serviceVersion = string.IsNullOrWhiteSpace(options.ServiceVersion)
-            ? "1.0.0"
-            : options.ServiceVersion;
+        if (string.IsNullOrWhiteSpace(options.ServiceName))
+            throw new InvalidOperationException("OpenTelemetry:ServiceName must be configured.");
+        if (string.IsNullOrWhiteSpace(options.ServiceVersion))
+            throw new InvalidOperationException("OpenTelemetry:ServiceVersion must be configured.");
+        if (string.IsNullOrWhiteSpace(options.Otlp.Endpoint) || options.Otlp.Endpoint != options.Otlp.Endpoint.Trim() ||
+            !Uri.TryCreate(options.Otlp.Endpoint, UriKind.Absolute, out Uri? endpointUri) ||
+            (endpointUri.Scheme != Uri.UriSchemeHttp && endpointUri.Scheme != Uri.UriSchemeHttps) ||
+            string.IsNullOrEmpty(endpointUri.Host) || !string.IsNullOrEmpty(endpointUri.UserInfo) ||
+            options.Otlp.Endpoint[(options.Otlp.Endpoint.IndexOf("://", StringComparison.Ordinal) + 3)..].Split('/', '?', '#')[0].Contains('@'))
+            throw new InvalidOperationException("OpenTelemetry:Otlp:Endpoint must be an absolute HTTP(S) URL without credentials.");
+        if (options.Traces.Enabled && (!double.IsFinite(options.Traces.SamplingRatio) || options.Traces.SamplingRatio < 0 || options.Traces.SamplingRatio > 1))
+            throw new InvalidOperationException("OpenTelemetry:Traces:SamplingRatio must be finite and between 0 and 1.");
 
-        string endpoint = string.IsNullOrWhiteSpace(options.Otlp.Endpoint)
-            ? "http://localhost:4317"
-            : options.Otlp.Endpoint;
+        string serviceName = options.ServiceName;
+        string serviceVersion = options.ServiceVersion;
+        string endpoint = options.Otlp.Endpoint;
 
         OtlpExportProtocol otlpProtocol = ResolveProtocol(options.Otlp.Protocol);
-        double samplingRatio = Math.Clamp(options.Traces.SamplingRatio, 0d, 1d);
+        double samplingRatio = options.Traces.SamplingRatio;
 
         ResourceBuilder resourceBuilder = ResourceBuilder
             .CreateDefault()
@@ -110,11 +141,12 @@ public static class OpenTelemetryExtensions
 
     private static OtlpExportProtocol ResolveProtocol(string? protocol)
     {
-        return protocol?.Trim().ToLowerInvariant() switch
+        return protocol?.ToLowerInvariant() switch
         {
+            "grpc" => OtlpExportProtocol.Grpc,
             "http" => OtlpExportProtocol.HttpProtobuf,
             "httpprotobuf" => OtlpExportProtocol.HttpProtobuf,
-            _ => OtlpExportProtocol.Grpc
+            _ => throw new InvalidOperationException("OpenTelemetry:Otlp:Protocol must be grpc, http or httpprotobuf.")
         };
     }
 }

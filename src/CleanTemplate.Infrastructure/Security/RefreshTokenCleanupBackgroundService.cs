@@ -33,7 +33,7 @@ public sealed class RefreshTokenCleanupBackgroundService : BackgroundService
             return;
         }
 
-        var intervalMinutes = Math.Clamp(_options.IntervalMinutes, 1, 1440);
+        var intervalMinutes = _options.IntervalMinutes;
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
 
         await RunCleanupAsync(stoppingToken).ConfigureAwait(false);
@@ -52,7 +52,7 @@ public sealed class RefreshTokenCleanupBackgroundService : BackgroundService
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
             var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
-            var retentionDays = Math.Clamp(_options.RevokedRetentionDays, 0, 365);
+            var retentionDays = _options.RevokedRetentionDays;
             var revokedThreshold = nowUtc.AddDays(-retentionDays);
 
             var deletedRows = await new RefreshTokenCleanupService(dbContext)

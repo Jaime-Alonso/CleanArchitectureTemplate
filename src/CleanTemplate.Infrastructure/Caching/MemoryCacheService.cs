@@ -36,7 +36,7 @@ public sealed class MemoryCacheService : ICacheService
         cancellationToken.ThrowIfCancellationRequested();
 
         var payload = JsonSerializer.Serialize(value, SerializerOptions);
-        var expiration = ttl ?? TimeSpan.FromSeconds(Math.Max(1, _options.DefaultTtlSeconds));
+        var expiration = ttl ?? TimeSpan.FromSeconds(_options.DefaultTtlSeconds);
 
         _memoryCache.Set(GetKey(key), payload, expiration);
         return Task.CompletedTask;

@@ -4,7 +4,7 @@ public static class DatabaseProviderParser
 {
     public static DatabaseProvider Parse(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (value is null)
             return DatabaseProvider.PostgreSql;
 
         return value.Trim().ToLowerInvariant() switch
@@ -17,7 +17,7 @@ public static class DatabaseProviderParser
             "sqliteinmemory" => DatabaseProvider.SqliteInMemory,
             "sqlite-inmemory" => DatabaseProvider.SqliteInMemory,
             "inmemory" => DatabaseProvider.SqliteInMemory,
-            _ => throw new InvalidOperationException($"Unsupported database provider '{value}'.")
+            _ => throw new InvalidOperationException("Unsupported DatabaseProvider.")
         };
     }
 }

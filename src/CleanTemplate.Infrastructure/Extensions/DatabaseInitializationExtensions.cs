@@ -17,7 +17,7 @@ public static class DatabaseInitializationExtensions
             if (!allowEphemeralDatabase || (connection.Mode != SqliteOpenMode.Memory && connection.DataSource != ":memory:"))
             {
                 throw new InvalidOperationException(
-                    "SQLite schema creation is only supported for in-memory databases in Development or Testing. " +
+                    "SQLite schema creation is only supported for in-memory databases when explicitly allowed. " +
                     "Use SQL Server or PostgreSQL with versioned migrations for persistent databases.");
             }
 

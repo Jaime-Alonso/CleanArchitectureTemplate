@@ -22,8 +22,8 @@ public sealed class RefreshTokenService : IRefreshTokenService
     {
         _dbContext = dbContext;
         _timeProvider = timeProvider;
-        _refreshTokenDays = Math.Clamp(options.Value.RefreshTokenDays, 1, 90);
-        _absoluteSessionDays = Math.Clamp(options.Value.AbsoluteSessionDays, 1, 90);
+        _refreshTokenDays = options.Value.RefreshTokenDays;
+        _absoluteSessionDays = options.Value.AbsoluteSessionDays;
     }
 
     public async Task<RefreshTokenIssueResult> IssueAsync(

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace CleanTemplate.Crosscutting.RateLimiting;
 
@@ -17,9 +18,13 @@ public static class RateLimitingExtensions
             .AddOptions<ApiRateLimitingOptions>()
             .Bind(configuration.GetSection(ApiRateLimitingOptions.SectionName))
             .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<ApiRateLimitingOptions>, RateLimitingValidator>();
 
         ApiRateLimitingOptions options = configuration.GetSection(ApiRateLimitingOptions.SectionName).Get<ApiRateLimitingOptions>()
             ?? new ApiRateLimitingOptions();
+        var error = ValidateOptions(options);
+        if (error is not null)
+            throw new InvalidOperationException(error);
 
         services.AddRateLimiter(rateLimiterOptions =>
         {
@@ -73,10 +78,42 @@ public static class RateLimitingExtensions
     {
         return new FixedWindowRateLimiterOptions
         {
-            PermitLimit = Math.Max(1, policy.PermitLimit),
-            Window = TimeSpan.FromSeconds(Math.Max(1, policy.WindowSeconds)),
+            PermitLimit = policy.PermitLimit,
+            Window = TimeSpan.FromSeconds(policy.WindowSeconds),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-            QueueLimit = Math.Max(0, policy.QueueLimit)
+            QueueLimit = policy.QueueLimit
         };
+    }
+
+    private static string? ValidateOptions(ApiRateLimitingOptions options)
+    {
+        static string? ValidatePolicy(FixedWindowPolicyOptions policy, string key)
+        {
+            if (policy.PermitLimit < 1) return $"{key}:PermitLimit must be greater than zero.";
+            if (policy.WindowSeconds is < 1 or > 4294967) return $"{key}:WindowSeconds must be between 1 and 4294967.";
+            if (policy.QueueLimit < 0) return $"{key}:QueueLimit must not be negative.";
+            return null;
+        }
+
+        var error = ValidatePolicy(options.Global, "RateLimiting:Global");
+        if (error is not null) return error;
+        foreach (var (name, policy) in options.Policies)
+        {
+            error = ValidatePolicy(policy, $"RateLimiting:Policies:{name}");
+            if (error is not null) return error;
+        }
+
+        return null;
+    }
+
+    private sealed class RateLimitingValidator : IValidateOptions<ApiRateLimitingOptions>
+    {
+        public RateLimitingValidator() { }
+
+        public ValidateOptionsResult Validate(string? name, ApiRateLimitingOptions options)
+        {
+            var error = ValidateOptions(options);
+            return error is null ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(error);
+        }
     }
 }

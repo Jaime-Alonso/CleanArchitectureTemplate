@@ -255,6 +255,7 @@ public sealed class ProblemDetailsProductionTests
         public EnvironmentSettings(bool disableLocalJwt = false)
         {
             Set("DatabaseProvider", "SqliteInMemory");
+            Set("Database__AllowEphemeralInProduction", "true");
             Set("ConnectionStrings__DefaultConnection", $"Data Source=problems-{Guid.NewGuid():N};Mode=Memory;Cache=Shared");
             Set("Auth__Schemes__LocalJwt__SigningKey", "production-test-signing-key-1234567890");
             Set("IdentitySeed__AdminPassword", "ChangeMe_UseUserSecrets!123");

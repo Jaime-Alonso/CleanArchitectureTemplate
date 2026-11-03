@@ -99,3 +99,8 @@ Confirm:
 - no layer dependency violations
 - endpoint mapped in `Program.cs`
 - generated use case compiles and tests pass
+# Configuration policy
+
+Preserve startup validation: LocalJwt access 1–1440 minutes, refresh and absolute session 1–90 days; unique signing IDs and a valid active ID. Validate enabled capabilities without logging configuration values. Production in-memory SQLite requires explicit `Database:AllowEphemeralInProduction=true`, loses data on restart, and initializes schema without bootstrap. Never restrict external role names to internal roles.
+
+Fixed-window rate limits allow 1–4294967 seconds; provisioning emails and domains must be well formed. Do not initialize SQLite implicitly in Staging or redefine connectivity readiness as a schema check.

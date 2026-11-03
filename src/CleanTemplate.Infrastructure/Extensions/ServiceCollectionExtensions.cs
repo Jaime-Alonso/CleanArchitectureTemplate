@@ -23,7 +23,15 @@ public static partial class ServiceCollectionExtensions
         AddIdentityOptions(services, configuration);
         AddCachingOptions(services, configuration);
         AddIdentity(services);
-        var cacheOptions = configuration.GetSection(CacheOptions.SectionName).Get<CacheOptions>() ?? new CacheOptions();
+        CacheOptions cacheOptions;
+        try
+        {
+            cacheOptions = configuration.GetSection(CacheOptions.SectionName).Get<CacheOptions>() ?? new CacheOptions();
+        }
+        catch (InvalidOperationException)
+        {
+            throw new InvalidOperationException("Caching:Provider or Caching:DefaultTtlSeconds contains an invalid configuration value.");
+        }
         services.AddScoped<IdentityDataSeeder>();
         AddCaching(services, cacheOptions);
         AddProductReads(services, configuration, provider, connectionString);

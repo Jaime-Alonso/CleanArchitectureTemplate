@@ -10,4 +10,5 @@ public sealed class LocalJwtOptions
     public IReadOnlyCollection<JwtSigningKeyOptions> SigningKeys { get; init; } = [];
     public int AccessTokenMinutes { get; init; } = 30;
     public int RefreshTokenDays { get; init; } = 14;
+    public int AbsoluteSessionDays { get; init; } = 30;
 }

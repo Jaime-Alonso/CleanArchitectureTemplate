@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Startup configuration policy: LocalJwt access 1–1440 minutes, refresh and absolute session 1–90 days; active key IDs are required and rotated IDs unique. Rate limiting fixed windows are 1–4294967 seconds. Validate only enabled auth capabilities and never log configuration values or arbitrary exception messages. OIDC authority is HTTPS without userinfo/query/fragment; provisioning email/domain rules must be well formed, default roles are internal Admin/User while external role names are unrestricted. Production SQLite in-memory requires explicit strict boolean `Database:AllowEphemeralInProduction=true`, initializes schema without auto-admin, and loses data on restart. SQLite initialization is restricted to Development/Testing or opted-in Production, not Staging. Readiness checks connectivity, not schema. Keep the process-level startup secret and opt-in tests.
+
 Guidelines for AI coding agents working in this repository.
 
 ---

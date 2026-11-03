@@ -33,7 +33,7 @@ public sealed class RedisCacheService : ICacheService
     public Task SetAsync<T>(string key, T value, TimeSpan? ttl = null, CancellationToken cancellationToken = default)
     {
         var payload = JsonSerializer.Serialize(value, SerializerOptions);
-        var expiration = ttl ?? TimeSpan.FromSeconds(Math.Max(1, _options.DefaultTtlSeconds));
+        var expiration = ttl ?? TimeSpan.FromSeconds(_options.DefaultTtlSeconds);
 
         return _cache.SetStringAsync(
             GetKey(key),

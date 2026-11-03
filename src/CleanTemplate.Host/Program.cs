@@ -26,6 +26,16 @@ try
         throw new InvalidOperationException("Unsupported operation.");
     var builder = WebApplication.CreateBuilder(operation is "migrate" or "bootstrap-admin" ? [] : args);
 
+    var ephemeralOptIn = builder.Configuration["Database:AllowEphemeralInProduction"];
+    if (ephemeralOptIn is not null && !bool.TryParse(ephemeralOptIn, out _))
+        throw new StartupConfigurationException("Database:AllowEphemeralInProduction");
+    CleanTemplate.Infrastructure.Database.DatabaseProvider provider = default;
+    ConfigureSafely("DatabaseProvider", () => provider = CleanTemplate.Infrastructure.Database.DatabaseProviderParser.Parse(builder.Configuration["DatabaseProvider"]));
+    if (builder.Environment.IsProduction()
+        && provider == CleanTemplate.Infrastructure.Database.DatabaseProvider.SqliteInMemory
+        && !string.Equals(ephemeralOptIn, "true", StringComparison.OrdinalIgnoreCase))
+        throw new StartupConfigurationException("Database:AllowEphemeralInProduction");
+
     if (operation is "migrate" or "bootstrap-admin")
     {
         builder.Services.AddSingleton(TimeProvider.System);
@@ -42,6 +52,8 @@ try
         return 0;
     }
 
+    StartupPreflight.Check(builder.Configuration);
+
     builder.Services.AddSingleton(TimeProvider.System);
 
     builder.Host.UseSerilog((context, config) =>
@@ -52,16 +64,24 @@ try
     builder.Services.AddGlobalErrorHandling();
 
     builder.Services.AddApplication();
-    builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddApiSecurity(builder.Configuration);
-    builder.Services.AddApiCors(builder.Configuration);
-    builder.Services.AddForwardedHeadersSupport(builder.Configuration);
-    builder.Services.AddApiRateLimiting(builder.Configuration);
-    builder.Services.AddOpenTelemetryObservability(builder.Configuration, builder.Environment);
-    builder.Services.AddOperationalHealthChecks(builder.Configuration);
+    ConfigureSafely("Database/Auth/Caching", () => builder.Services.AddInfrastructure(builder.Configuration));
+    ConfigureSafely("Auth", () => builder.Services.AddApiSecurity(builder.Configuration));
+    ConfigureSafely("Cors", () => builder.Services.AddApiCors(builder.Configuration));
+    ConfigureSafely("ForwardedHeaders:KnownProxies/Networks", () => builder.Services.AddForwardedHeadersSupport(builder.Configuration));
+    ConfigureSafely("RateLimiting", () => builder.Services.AddApiRateLimiting(builder.Configuration));
+    ConfigureSafely("OpenTelemetry", () => builder.Services.AddOpenTelemetryObservability(builder.Configuration, builder.Environment));
+    ConfigureSafely("HealthChecks", () => builder.Services.AddOperationalHealthChecks(builder.Configuration));
 
     builder.Services.ValidateRequestValidationConfiguration();
     var app = builder.Build();
+
+    ConfigureSafely("Auth", () => _ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CleanTemplate.Api.Security.Options.AuthOptions>>().Value);
+    ConfigureSafely("Auth:Schemes:LocalJwt", () => _ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CleanTemplate.Infrastructure.Security.RefreshTokenOptions>>().Value);
+    ConfigureSafely("Auth:Schemes:LocalJwt", () => _ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CleanTemplate.Infrastructure.Security.Options.LocalJwtOptions>>().Value);
+    ConfigureSafely("Auth:Provisioning", () => _ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CleanTemplate.Application.Security.ExternalRoleMappingOptions>>().Value);
+    ConfigureSafely("Auth:RefreshTokenCleanup", () => _ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CleanTemplate.Infrastructure.Security.RefreshTokenCleanupOptions>>().Value);
+    ConfigureSafely("Caching", () => _ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CleanTemplate.Infrastructure.Caching.Options.CacheOptions>>().Value);
+    ConfigureSafely("RateLimiting", () => _ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CleanTemplate.Crosscutting.RateLimiting.Options.ApiRateLimitingOptions>>().Value);
 
     await app.Services.InitializeIdentityAsync(app.Lifetime.ApplicationStopping);
 
@@ -101,6 +121,11 @@ catch (HostAbortedException)
     // WebApplicationFactory uses this exception to stop the entry point after building the host.
     throw;
 }
+catch (StartupConfigurationException ex)
+{
+    Log.Fatal("Invalid startup configuration: {ConfigurationKey}", ex.Key);
+    return 1;
+}
 catch (Exception ex)
 {
     // Exception messages can contain configuration values, including secrets.
@@ -113,6 +138,17 @@ finally
 }
 
 return 0;
+
+static void ConfigureSafely(string key, Action configure)
+{
+    try { configure(); }
+    catch (Exception) { throw new StartupConfigurationException(key); }
+}
+
+internal sealed class StartupConfigurationException(string key) : Exception
+{
+    public string Key { get; } = key;
+}
 
 public partial class Program
 {

@@ -13,6 +13,7 @@ public static partial class ServiceCollectionExtensions
         services
             .AddOptions<CacheOptions>()
             .Bind(configuration.GetSection(CacheOptions.SectionName))
+            .Validate(options => Enum.IsDefined(options.Provider), "Caching:Provider must be a defined provider.")
             .Validate(options => options.DefaultTtlSeconds > 0, "Caching:DefaultTtlSeconds must be greater than zero.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.KeyPrefix), "Caching:KeyPrefix must be configured.")
             .Validate(
@@ -24,6 +25,12 @@ public static partial class ServiceCollectionExtensions
 
     private static void AddCaching(IServiceCollection services, CacheOptions cacheOptions)
     {
+        if (!Enum.IsDefined(cacheOptions.Provider))
+            throw new InvalidOperationException("Caching:Provider must be a defined provider.");
+        if (cacheOptions.DefaultTtlSeconds <= 0)
+            throw new InvalidOperationException("Caching:DefaultTtlSeconds must be greater than zero.");
+        if (string.IsNullOrWhiteSpace(cacheOptions.KeyPrefix))
+            throw new InvalidOperationException("Caching:KeyPrefix must be configured.");
         switch (cacheOptions.Provider)
         {
             case CacheProvider.Memory:
@@ -44,7 +51,7 @@ public static partial class ServiceCollectionExtensions
                 services.AddSingleton<ICacheService, RedisCacheService>();
                 break;
             default:
-                throw new InvalidOperationException($"Unsupported cache provider '{cacheOptions.Provider}'.");
+                throw new InvalidOperationException("Caching:Provider must be a defined provider.");
         }
 
     }
