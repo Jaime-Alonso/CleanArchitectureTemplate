@@ -18,6 +18,14 @@ public sealed class ProductTests
     }
 
     [Fact]
+    public void Constructor_AssignsVersion7Identifier()
+    {
+        var product = new Product("Keyboard", "Mechanical", 0m, 10);
+
+        Assert.Equal(7, product.Id.Version);
+    }
+
+    [Fact]
     public void Constructor_WithEmptyName_ThrowsDomainValidationException()
     {
         Assert.Throws<DomainValidationException>(() => new Product("", "desc", 10m, 1));

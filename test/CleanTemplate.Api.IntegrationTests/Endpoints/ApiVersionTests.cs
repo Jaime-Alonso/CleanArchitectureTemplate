@@ -4,6 +4,7 @@ using System.Text.Json;
 using Asp.Versioning;
 using CleanTemplate.Api.Extensions;
 using CleanTemplate.Api.IntegrationTests.Infrastructure;
+using CleanTemplate.Host.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -15,6 +16,51 @@ namespace CleanTemplate.Api.IntegrationTests.Endpoints;
 [Collection(HostIntegrationCollection.Name)]
 public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassFixture<TestWebApplicationFactory>
 {
+    [Theory]
+    [InlineData(Microsoft.OpenApi.OpenApiSpecVersion.OpenApi3_0)]
+    [InlineData(Microsoft.OpenApi.OpenApiSpecVersion.OpenApi3_1)]
+    public async Task OpenApi_ToolingProviderGeneratesTheSameOperationsWithoutAnHttpRequest(Microsoft.OpenApi.OpenApiSpecVersion specVersion)
+    {
+        // Visual Studio and dotnet getdocument discover this framework interface
+        // by name because it is intentionally internal to Microsoft.AspNetCore.OpenApi.
+        var providerType = typeof(Microsoft.AspNetCore.OpenApi.OpenApiOptions).Assembly
+            .GetType("Microsoft.Extensions.ApiDescriptions.IDocumentProvider", throwOnError: true)!;
+        var provider = factory.Services.GetRequiredService(providerType);
+        // Match getdocument's invariant writer and explicit specification version.
+        using var writer = new StringWriter(System.Globalization.CultureInfo.InvariantCulture);
+        var generate = providerType.GetMethod("GenerateAsync", [typeof(string), typeof(TextWriter), typeof(Microsoft.OpenApi.OpenApiSpecVersion)])!;
+        await (Task)generate.Invoke(provider, ["v1", writer, specVersion])!;
+        using var generated = JsonDocument.Parse(writer.ToString());
+        Assert.Equal("v1", generated.RootElement.GetProperty("info").GetProperty("version").GetString());
+        using var client = factory.CreateClient();
+        using var served = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        static string[] Operations(JsonDocument document) => document.RootElement.GetProperty("paths").EnumerateObject()
+            .SelectMany(path => path.Value.EnumerateObject().Select(method =>
+                $"{path.Name}:{method.Name}:{method.Value.GetProperty("operationId").GetString()}"))
+            .Order().ToArray();
+        Assert.Equal(Operations(served!), Operations(generated));
+        Assert.Equal(8, Operations(generated).Length);
+    }
+
+    [Fact]
+    public async Task OpenApi_NativeDocumentExcludesOperationsAssignedToAnotherVersion()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddApiContract(builder.Services.AddApiVersioningConfiguration());
+        await using var app = builder.Build();
+        app.MapOpenApi();
+        var versions = app.NewApiVersionSet().HasApiVersion(new ApiVersion(1, 0)).HasApiVersion(new ApiVersion(2, 0)).Build();
+        app.MapGet("/first", () => "first").WithApiVersionSet(versions).MapToApiVersion(1.0);
+        app.MapGet("/second", () => "second").WithApiVersionSet(versions).MapToApiVersion(2.0);
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var document = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var paths = document!.RootElement.GetProperty("paths");
+        Assert.True(paths.TryGetProperty("/first", out _));
+        Assert.False(paths.TryGetProperty("/second", out _));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("1.0")]
@@ -66,7 +112,11 @@ public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassF
         static void Property(JsonElement schema, string name, string type, string? format = null)
         {
             var property = schema.GetProperty("properties").GetProperty(name);
-            Assert.Equal(type, property.GetProperty("type").GetString());
+            var schemaType = property.GetProperty("type");
+            if (schemaType.ValueKind == JsonValueKind.Array)
+                Assert.Contains(schemaType.EnumerateArray(), item => item.GetString() == type);
+            else
+                Assert.Equal(type, schemaType.GetString());
             if (format is not null) Assert.Equal(format, property.GetProperty("format").GetString());
         }
 
@@ -74,26 +124,25 @@ public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassF
         {
             var schema = schemas.GetProperty(schemaName);
             var properties = schema.GetProperty("properties");
-            Property(schema, "price", "number", "decimal");
-            Assert.Equal(0m, properties.GetProperty("price").GetProperty("minimum").GetDecimal());
-            Assert.Equal(9999999999999999.99m, properties.GetProperty("price").GetProperty("maximum").GetDecimal());
-            Assert.Equal(0.01m, properties.GetProperty("price").GetProperty("multipleOf").GetDecimal());
-            Assert.Equal(200, properties.GetProperty("name").GetProperty("maxLength").GetInt32());
-            Assert.Equal(1, properties.GetProperty("name").GetProperty("minLength").GetInt32());
-            Assert.Equal(0, properties.GetProperty("stock").GetProperty("minimum").GetInt32());
+            Property(schema, "price", "number");
+            if (schemaName.EndsWith("Request", StringComparison.Ordinal))
+            {
+                Assert.Equal(200, properties.GetProperty("name").GetProperty("maxLength").GetInt32());
+                Assert.Equal(1, properties.GetProperty("name").GetProperty("minLength").GetInt32());
+                Assert.Equal(0, properties.GetProperty("stock").GetProperty("minimum").GetInt32());
+            }
             if (properties.TryGetProperty("description", out var description))
             {
-                Assert.Equal(1000, description.GetProperty("maxLength").GetInt32());
+                if (schemaName.EndsWith("Request", StringComparison.Ordinal))
+                    Assert.Equal(1000, description.GetProperty("maxLength").GetInt32());
                 var types = description.GetProperty("type").EnumerateArray().Select(value => value.GetString());
                 Assert.Contains("string", types);
                 Assert.Contains("null", types);
             }
             if (schemaName.EndsWith("Dto", StringComparison.Ordinal))
             {
-                Required(schema, "id", "version", "price");
                 Property(schema, "id", "string", "uuid");
                 Property(schema, "version", "integer", "int64");
-                Assert.Equal(1, properties.GetProperty("version").GetProperty("minimum").GetInt32());
             }
         }
         var update = schemas.GetProperty("UpdateProductRequest");
@@ -109,33 +158,28 @@ public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassF
         var created = schemas.GetProperty("CreateProductResponse");
         Required(created, "id");
         Property(created, "id", "string", "uuid");
-        foreach (var name in new[] { "ProblemDetails", "HttpValidationProblemDetails" })
-        {
-            var schema = schemas.GetProperty(name);
-            Required(schema, "code", "traceId");
-            Property(schema, "code", "string");
-            Property(schema, "traceId", "string");
-            if (name == "HttpValidationProblemDetails")
-            {
-                Required(schema, "errors");
-                Property(schema, "errors", "object");
-                var values = schema.GetProperty("properties").GetProperty("errors").GetProperty("additionalProperties");
-                Assert.Equal("array", values.GetProperty("type").GetString());
-                Assert.Equal("string", values.GetProperty("items").GetProperty("type").GetString());
-            }
-        }
+        var problem = schemas.GetProperty("ProblemDetails");
+        Property(problem, "title", "string");
+        Property(problem, "status", "integer");
+        if (problem.TryGetProperty("additionalProperties", out var extensions))
+            Assert.NotEqual(JsonValueKind.False, extensions.ValueKind);
         var paths = root.GetProperty("paths");
         var delete = paths.GetProperty("/api/products/{id}").GetProperty("delete");
         var expectedVersion = delete.GetProperty("parameters").EnumerateArray().Single(p => p.GetProperty("name").GetString() == "expectedVersion");
         Assert.True(expectedVersion.GetProperty("required").GetBoolean());
         var parameterSchema = expectedVersion.GetProperty("schema");
-        Assert.Equal("integer", parameterSchema.GetProperty("type").GetString());
+        var parameterTypes = parameterSchema.GetProperty("type");
+        if (parameterTypes.ValueKind == JsonValueKind.Array)
+            Assert.Contains(parameterTypes.EnumerateArray(), item => item.GetString() == "integer");
+        else
+            Assert.Equal("integer", parameterTypes.GetString());
         Assert.Equal("int64", parameterSchema.GetProperty("format").GetString());
         Assert.Equal(1, parameterSchema.GetProperty("minimum").GetInt32());
         var badRequest = delete.GetProperty("responses").GetProperty("400").GetProperty("content").GetProperty("application/problem+json").GetProperty("schema");
-        var alternatives = badRequest.GetProperty("anyOf").EnumerateArray().ToArray();
-        Assert.Contains(alternatives, alternative => alternative.GetProperty("properties").TryGetProperty("errors", out _));
-        Assert.Contains(alternatives, alternative => !alternative.GetProperty("properties").TryGetProperty("errors", out _));
+        if (badRequest.TryGetProperty("$ref", out var problemReference))
+            badRequest = schemas.GetProperty(problemReference.GetString()!.Split('/')[^1]);
+        Assert.True(badRequest.GetProperty("properties").TryGetProperty("status", out _));
+        Assert.False(badRequest.TryGetProperty("oneOf", out _));
     }
 
     [Fact]
@@ -146,14 +190,6 @@ public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassF
         var bearer = document!.RootElement.GetProperty("components").GetProperty("securitySchemes").GetProperty("Bearer");
         Assert.Equal("http", bearer.GetProperty("type").GetString());
         Assert.Equal("bearer", bearer.GetProperty("scheme").GetString());
-        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
-        foreach (var schemaName in new[] { "ProblemDetails", "HttpValidationProblemDetails" })
-        {
-            var properties = schemas.GetProperty(schemaName).GetProperty("properties");
-            Assert.Equal("string", properties.GetProperty("code").GetProperty("type").GetString());
-            Assert.Equal("string", properties.GetProperty("traceId").GetProperty("type").GetString());
-            if (schemaName == "HttpValidationProblemDetails") Assert.True(properties.TryGetProperty("errors", out _));
-        }
         var paths = document!.RootElement.GetProperty("paths");
         foreach (var (path, method, status) in new[]
         {
@@ -169,9 +205,9 @@ public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassF
             else
                 Assert.False(operation.TryGetProperty("security", out _));
             var responses = operation.GetProperty("responses");
-            Assert.True(responses.GetProperty("429").GetProperty("headers").TryGetProperty("Retry-After", out _));
+            Assert.True(responses.GetProperty("429").GetProperty("content").TryGetProperty("application/problem+json", out _));
             if (responses.TryGetProperty("401", out var unauthorized))
-                Assert.True(unauthorized.GetProperty("headers").TryGetProperty("WWW-Authenticate", out _));
+                Assert.True(unauthorized.GetProperty("content").TryGetProperty("application/problem+json", out _));
             var success = responses.GetProperty(status);
             if (status == "204") Assert.False(success.TryGetProperty("content", out _));
             else Assert.True(success.GetProperty("content").GetProperty("application/json").TryGetProperty("schema", out _));
@@ -198,6 +234,8 @@ public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassF
                 Assert.Contains(operation.GetProperty("parameters").EnumerateArray(), p =>
                     p.GetProperty("name").GetString() == "X-Api-Version" && p.GetProperty("in").GetString() == "header" &&
                     (!p.TryGetProperty("required", out var required) || !required.GetBoolean()));
+                var header = operation.GetProperty("parameters").EnumerateArray().Single(p => p.GetProperty("name").GetString() == "X-Api-Version");
+                Assert.Equal("string", header.GetProperty("schema").GetProperty("type").GetString());
             }
         }
         Assert.False(paths.TryGetProperty("/health", out _));

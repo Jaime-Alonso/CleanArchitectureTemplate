@@ -2,11 +2,13 @@
 
   <PropertyGroup>
     <UserSecretsId>CleanTemplate.Host-278bf54b-d6c1-4f81-b089-1735bc196d1d</UserSecretsId>
+    <!-- Native OpenAPI documents use ApiExplorer version groups; the versioning
+         bridge's AddOpenApi/WithDocumentPerVersion recommendations do not apply. -->
+    <NoWarn>$(NoWarn);AV0029;AV0030</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
-    <PackageReference Include="Asp.Versioning.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="Serilog" />

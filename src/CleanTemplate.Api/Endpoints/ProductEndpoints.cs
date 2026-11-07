@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Asp.Versioning;
 using CleanTemplate.Api.Endpoints.Contracts.Products;
 using CleanTemplate.Api.Extensions;
@@ -18,35 +19,32 @@ public static class ProductEndpoints
     {
         var versions = app.NewApiVersionSet().HasApiVersion(new ApiVersion(1, 0)).ReportApiVersions().Build();
         var group = app.MapGroup("/api/products").WithApiVersionSet(versions).MapToApiVersion(1.0);
-        group.RequireAuthorization("UserOrAdmin");
+        group.RequireAuthorization("UserOrAdmin")
+            .ProducesProblem(400).ProducesProblem(401).ProducesProblem(403)
+            .ProducesProblem(429).ProducesProblem(500);
 
         group.MapPost("/", CreateProduct)
             .RequireAuthorization("AdminOnly")
             .WithName("CreateProduct")
-            .Produces<CreateProductResponse>(StatusCodes.Status201Created)
-            .ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403).ProducesProblem(500);
+            .Produces<CreateProductResponse>(StatusCodes.Status201Created);
 
         group.MapPut("/{id:guid}", UpdateProduct)
             .RequireAuthorization("AdminOnly")
             .WithName("UpdateProduct")
-            .Produces(204).ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403)
-            .ProducesProblem(404).ProducesProblem(409).ProducesProblem(500);
+            .Produces(204).ProducesProblem(404).ProducesProblem(409);
 
         group.MapDelete("/{id:guid}", DeleteProduct)
             .RequireAuthorization("AdminOnly")
             .WithName("DeleteProduct")
-            .Produces(204).ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403)
-            .ProducesProblem(404).ProducesProblem(409).ProducesProblem(500);
+            .Produces(204).ProducesProblem(404).ProducesProblem(409);
 
         group.MapGet("/{id:guid}", GetProductById)
             .WithName("GetProductById")
-            .Produces<ProductDto>().ProducesValidationProblem().ProducesProblem(401).ProducesProblem(403)
-            .ProducesProblem(404).ProducesProblem(500);
+            .Produces<ProductDto>().ProducesProblem(404);
 
         group.MapGet("/", GetProducts)
             .WithName("GetProducts")
-            .Produces<PagedResult<ProductListItemDto>>().ProducesValidationProblem().ProducesProblem(401)
-            .ProducesProblem(403).ProducesProblem(500);
+            .Produces<PagedResult<ProductListItemDto>>();
 
         return app;
     }
@@ -100,7 +98,7 @@ public static class ProductEndpoints
 
     private static async Task<IResult> DeleteProduct(
         Guid id,
-        long expectedVersion,
+        [Range(1L, long.MaxValue)] long expectedVersion,
         ISender sender,
         CancellationToken cancellationToken)
     {

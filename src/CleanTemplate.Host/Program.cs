@@ -99,7 +99,7 @@ try
 
     if (app.Environment.IsDevelopment())
     {
-        app.MapOpenApi().WithDocumentPerVersion();
+        app.MapOpenApi();
         app.UseScalarDocumentation();
     }
 

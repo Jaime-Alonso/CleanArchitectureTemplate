@@ -6,7 +6,7 @@ public abstract class Entity : IEquatable<Entity>
 
     protected Entity()
     {
-        Id = Guid.NewGuid();
+        Id = Guid.CreateVersion7();
     }
 
     protected Entity(Guid id)

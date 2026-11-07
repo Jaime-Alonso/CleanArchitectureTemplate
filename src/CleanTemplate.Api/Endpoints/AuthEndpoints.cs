@@ -24,27 +24,26 @@ public static class AuthEndpoints
         }
 
         var versions = app.NewApiVersionSet().HasApiVersion(new ApiVersion(1, 0)).ReportApiVersions().Build();
-        var group = app.MapGroup("/auth").WithApiVersionSet(versions).MapToApiVersion(1.0);
+        var group = app.MapGroup("/auth").WithApiVersionSet(versions).MapToApiVersion(1.0)
+            .ProducesProblem(400).ProducesProblem(429).ProducesProblem(500);
 
         group.MapPost("/login", Login)
             .AllowAnonymous()
             .RequireRateLimiting(AuthRateLimitPolicies.Login)
             .WithName("Login")
-            .Produces<LoginResponse>().ProducesValidationProblem().ProducesProblem(401)
-            .ProducesProblem(429).ProducesProblem(500);
+            .Produces<LoginResponse>().ProducesProblem(401);
 
         group.MapPost("/refresh", Refresh)
             .AllowAnonymous()
             .RequireRateLimiting(AuthRateLimitPolicies.Refresh)
             .WithName("RefreshToken")
-            .Produces<LoginResponse>().ProducesValidationProblem().ProducesProblem(401)
-            .ProducesProblem(429).ProducesProblem(500);
+            .Produces<LoginResponse>().ProducesProblem(401);
 
         group.MapPost("/logout", Logout)
             .AllowAnonymous()
             .RequireRateLimiting(AuthRateLimitPolicies.Logout)
             .WithName("Logout")
-            .Produces(204).ProducesValidationProblem().ProducesProblem(429).ProducesProblem(500);
+            .Produces(204);
 
         return app;
     }

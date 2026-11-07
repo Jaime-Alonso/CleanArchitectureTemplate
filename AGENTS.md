@@ -291,3 +291,5 @@ public async Task<Result<User>> GetUserAsync(
 - Follow SOLID principles
 - Prefer composition over inheritance
 - Write tests for all new functionality
+
+OpenAPI uses native per-version documents selected by ApiExplorer groups. Keep standard declarative metadata on API contracts, with shared domain constants and no transport attributes in Application/Domain. Do not add custom schema transformers, precision attributes, response rewriting or business-type dispatch to preserve historical schema/client layouts. Standard ProblemDetails covers extension fields, including validation errors; never introduce oneOf for overlapping error shapes. Keep only minimal API information and Bearer security configuration. Test HTTP and tooling-provider generation, actual version membership, and the default generated-client smoke.
