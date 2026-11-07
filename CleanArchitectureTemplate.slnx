@@ -28,5 +28,6 @@
     <Project Path="test/CleanTemplate.Application.Tests/CleanTemplate.Application.Tests.csproj" />
     <Project Path="test/CleanTemplate.Api.IntegrationTests/CleanTemplate.Api.IntegrationTests.csproj" />
     <Project Path="test/CleanTemplate.Infrastructure.Tests/CleanTemplate.Infrastructure.Tests.csproj" />
+    <Project Path="test/CleanTemplate.Infrastructure.RealTests/CleanTemplate.Infrastructure.RealTests.csproj" />
   </Folder>
 </Solution>

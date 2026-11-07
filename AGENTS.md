@@ -8,6 +8,8 @@ Observability policy: preserve HTTP-only trace minimization and correlation, std
 
 Resilience policy: follow `docs/recovery/operations.md`; operators own encrypted backups, keys, retention, restore drills and RPO/RTO. Permission failures fail closed, not via Redis or token roles. Cache factories must be read-only/idempotent; no automatic retries of ambiguous writes or refresh rotations. Shutdown and readiness timeouts are cooperative; await scoped operations before disposal. Cleanup's separate deletes are not an atomic unit.
 
+Real infrastructure tests are opt-in via `dotnet test test/CleanTemplate.Infrastructure.RealTests/CleanTemplate.Infrastructure.RealTests.csproj -c Release -p:RunInfrastructureReal=true --filter Category=InfrastructureReal`; Docker failures must remain visible, not skips. See that project's README for HTTP acceptance scope and serialized host startup. Legacy integration factories are not all Testing; migration is limited to T29. The isolated shutdown cleanup test is tagged `ShutdownCleanupIsolated`.
+
 Guidelines for AI coding agents working in this repository.
 
 ---

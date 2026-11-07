@@ -179,6 +179,8 @@ Visually, this ordering reinforces the architectural message:
 
 The declared dependency matrix and essential build conventions are checked by `CleanTemplate.ArchitectureTests`, including conditional and unused project references. Run it with `dotnet test test/CleanTemplate.ArchitectureTests/CleanTemplate.ArchitectureTests.csproj`. See [ADR-0001](docs/adr/0001-data-access-and-dependencies.md) for the decision and verification limits.
 
+Real SQL Server, PostgreSQL and Redis tests are opt-in and require Docker: `dotnet test test/CleanTemplate.Infrastructure.RealTests/CleanTemplate.Infrastructure.RealTests.csproj -c Release -p:RunInfrastructureReal=true --filter Category=InfrastructureReal`. Docker failures are test failures, not skips; see [the real-test guide](test/CleanTemplate.Infrastructure.RealTests/README.md) for isolation and HTTP acceptance scope. Existing legacy integration factories are not all Testing; their migration is T29. The isolated cleanup shutdown test is labeled `ShutdownCleanupIsolated`.
+
 ## Requirements
 
 - .NET SDK installed

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject Condition="'$(RunInfrastructureReal)' != 'true'">false</IsTestProject>
+    <IsTestProject Condition="'$(RunInfrastructureReal)' == 'true'">true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.Redis" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/CleanTemplate.Infrastructure/CleanTemplate.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/CleanTemplate.Host/CleanTemplate.Host.csproj" />
+    <ProjectReference Include="../../src/CleanTemplate.Migrations.SqlServer/CleanTemplate.Migrations.SqlServer.csproj" />
+    <ProjectReference Include="../../src/CleanTemplate.Migrations.PostgreSql/CleanTemplate.Migrations.PostgreSql.csproj" />
+  </ItemGroup>
+</Project>

@@ -18,6 +18,8 @@ Preserve IP-only per-process limiting after trusted forwarded headers and before
 
 Create a new feature use case with consistent structure across Application, Api, and tests.
 
+Real infrastructure tests are opt-in in Release using `-p:RunInfrastructureReal=true --filter Category=InfrastructureReal`; Docker failures are not skips. See `test/CleanTemplate.Infrastructure.RealTests/README.md` for HTTP acceptance scope and serialized host startup. Do not claim legacy factories all use Testing; their migration is T29. The isolated cleanup shutdown test is tagged `ShutdownCleanupIsolated`.
+
 This skill is intentionally opinionated: it prioritizes practical consistency over strict architecture purism.
 
 ## Inputs

@@ -46,6 +46,9 @@
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <!-- Keep SQL Client's transitive cryptography dependency patched. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.16.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>

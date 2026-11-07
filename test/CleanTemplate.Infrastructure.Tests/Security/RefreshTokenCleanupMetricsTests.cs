@@ -65,6 +65,7 @@ public sealed class RefreshTokenCleanupMetricsTests
     }
 
     [Fact]
+    [Trait("Category", "ShutdownCleanupIsolated")]
     public async Task StopDuringBlockedCommand_AwaitsCancellationBeforeDisposingContext_WithoutWriting()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
