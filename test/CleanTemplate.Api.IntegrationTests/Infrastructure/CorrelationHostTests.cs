@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CleanTemplate.Api.IntegrationTests.Infrastructure;
@@ -141,18 +140,11 @@ public sealed class CorrelationHostTests
         finally { Console.SetOut(previous); }
     }
 
-    private sealed class CorrelationFactory : WebApplicationFactory<Program>
+    private sealed class CorrelationFactory : TestWebApplicationFactory
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Development");
-            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["IdentitySeed:AdminPassword"] = "ChangeMe_UseUserSecrets!123",
-                ["Auth:Schemes:LocalJwt:SigningKey"] = "integration-test-signing-key-1234567890",
-                ["OpenTelemetry:Traces:Enabled"] = "false",
-                ["OpenTelemetry:Metrics:Enabled"] = "false"
-            }));
+            base.ConfigureWebHost(builder);
             builder.ConfigureServices(services => services.AddTransient<IStartupFilter, ThrowingFilter>());
         }
     }
@@ -166,16 +158,11 @@ public sealed class CorrelationHostTests
         };
     }
 
-    private sealed class MatchedFailureFactory : WebApplicationFactory<Program>
+    private sealed class MatchedFailureFactory : TestWebApplicationFactory
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Development");
-            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["IdentitySeed:AdminPassword"] = "ChangeMe_UseUserSecrets!123",
-                ["Auth:Schemes:LocalJwt:SigningKey"] = "integration-test-signing-key-1234567890"
-            }));
+            base.ConfigureWebHost(builder);
             builder.ConfigureServices(services => services.AddTransient<IStartupFilter, MatchedFailureFilter>());
         }
     }

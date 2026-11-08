@@ -1,0 +1,8 @@
+title = "CleanTemplate source scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated/local output and Git metadata are not source inputs"
+paths = ['''(^|[\\/])(\.git|\.vs|\.idea|bin|obj|work|artifacts)[\\/]''']

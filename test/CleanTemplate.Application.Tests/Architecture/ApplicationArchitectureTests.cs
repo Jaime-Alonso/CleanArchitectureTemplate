@@ -1,4 +1,3 @@
-using System.Linq;
 using CleanTemplate.Application.Products.Commands.CreateProduct;
 
 namespace CleanTemplate.Application.Tests.Architecture;

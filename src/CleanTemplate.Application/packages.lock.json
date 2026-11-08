@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "FluentValidation": {
+        "type": "Direct",
+        "requested": "[12.2.0, )",
+        "resolved": "12.2.0",
+        "contentHash": "DR3lFbdnKucaaj1/8zMNOACMz/64igzox1yVZSFVsLxYB5mxAB+wFP1WZ8fjwrZnbU1KA1DoMzHKYKxUfuZ4wQ=="
+      },
+      "FluentValidation.DependencyInjectionExtensions": {
+        "type": "Direct",
+        "requested": "[12.2.0, )",
+        "resolved": "12.2.0",
+        "contentHash": "QpKXgiO9E6wXCh19X2Musn8MZM0xt7KQt/QrD6GDBn3MCUfy8a+rkhCzrYJNCfoxTsTRQ7bpKP8T3geTnJNNeQ==",
+        "dependencies": {
+          "FluentValidation": "12.2.0",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "2.1.0"
+        }
+      },
+      "Mediora": {
+        "type": "Direct",
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "Jsn54nOLLk+MKUJ4TaNPTRb1dK/aWNtwHgOTICu5PZgXUjPF0Nzkq04Sgxs6f3d7qdHN5OZfro28kqiR9PcCig==",
+        "dependencies": {
+          "Mediora.Contracts": "1.0.0",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.0"
+        }
+      },
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "Direct",
+        "requested": "[10.0.14, )",
+        "resolved": "10.0.14",
+        "contentHash": "SwcbEBtkECq3D2oywvHkm46fyrX9Dd2JPWphDnHUc2+cUWR1Mdo41atAjh/9iZjgQxuvbKfZKXqostT/LZfefA==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.14"
+        }
+      },
+      "Mediora.Contracts": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "wTCbpOi5ZRnQzhsawLprlBgKASSIFxwwDYvO8JYP9DyhtQWrkPZgLVrcBEqYu4ZOeTSDmT05IIB8LsypjyIDXw=="
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.14",
+        "contentHash": "QtpQzuSZVyTPCuHW058yCs9Nj0394uUkNyFHS813nOmK9UgUdBdaprJ5PPsBgsQIpxADTsTkbaMMonykem6qdw=="
+      },
+      "cleantemplate.domain": {
+        "type": "Project",
+        "dependencies": {
+          "CleanTemplate.SharedKernel": "[1.0.0, )"
+        }
+      },
+      "cleantemplate.sharedkernel": {
+        "type": "Project"
+      }
+    }
+  }
+}

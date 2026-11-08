@@ -1,0 +1,118 @@
+name: CI
+
+# Prepared for optional future adoption. No automatic runs on push, PR or schedule.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  quality:
+    name: Release (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Test quality gates
+        run: ./scripts/tests/Test-QualityGates.ps1
+      - name: Release quality and coverage
+        run: ./scripts/ci/Invoke-Quality.ps1
+      - name: Publish results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: quality-${{ matrix.os }}
+          path: artifacts/quality/
+          if-no-files-found: error
+          retention-days: 14
+
+  infrastructure:
+    name: Real infrastructure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Restore locked dependencies
+        run: dotnet restore CleanArchitectureTemplate.slnx --locked-mode --configfile NuGet.Config
+      - name: SQL Server, PostgreSQL and Redis acceptance
+        run: >-
+          dotnet test test/CleanTemplate.Infrastructure.RealTests/CleanTemplate.Infrastructure.RealTests.csproj
+          -c Release --no-restore -p:RunInfrastructureReal=true --filter Category=InfrastructureReal
+          --logger trx --results-directory artifacts/infrastructure
+      - name: Publish real acceptance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: infrastructure
+          path: artifacts/infrastructure/
+          if-no-files-found: error
+          retention-days: 14
+
+  security:
+    name: Source security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate workflows and scan source
+        run: ./scripts/ci/Test-SourceSecurity.ps1
+      - name: Publish redacted findings
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: source-security
+          path: artifacts/security/**/gitleaks.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  required:
+    name: CI required
+    if: always()
+    needs: [quality, infrastructure, security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every quality job
+        shell: pwsh
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          INFRASTRUCTURE: ${{ needs.infrastructure.result }}
+          SECURITY: ${{ needs.security.result }}
+        run: |
+          if ($env:QUALITY -ne 'success' -or $env:INFRASTRUCTURE -ne 'success' -or $env:SECURITY -ne 'success') {
+            throw 'Required quality checks did not all succeed.'
+          }

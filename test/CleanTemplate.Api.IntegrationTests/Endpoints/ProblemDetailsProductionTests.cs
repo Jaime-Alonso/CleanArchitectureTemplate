@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using CleanTemplate.Api.IntegrationTests.Infrastructure;
 using CleanTemplate.Application.Common.Pagination;
 using CleanTemplate.Application.Contracts.Identity;
 using CleanTemplate.Application.Contracts.Persistence;
@@ -14,7 +15,6 @@ using CleanTemplate.Infrastructure.Persistence;
 using CleanTemplate.SharedKernel.Errors;
 using CleanTemplate.SharedKernel.Results;
 using Mediora;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +30,6 @@ public sealed class ProblemDetailsProductionTests
     [Fact]
     public async Task ProblemDetails_UsesIncomingW3CTraceId()
     {
-        using var settings = new EnvironmentSettings();
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var request = new HttpRequestMessage(HttpMethod.Get, "/not-a-route");
@@ -46,7 +45,6 @@ public sealed class ProblemDetailsProductionTests
     [InlineData("/scalar/v1")]
     public async Task Documentation_IsNotMappedInProduction(string path)
     {
-        using var settings = new EnvironmentSettings();
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var response = await client.GetAsync(path);
@@ -58,7 +56,6 @@ public sealed class ProblemDetailsProductionTests
     [InlineData("text/html")]
     public async Task ErrorsIgnoreAcceptAndUnauthorizedResponsesIncludeBearer(string accept)
     {
-        using var settings = new EnvironmentSettings();
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         client.DefaultRequestHeaders.Accept.ParseAdd(accept);
@@ -109,8 +106,7 @@ public sealed class ProblemDetailsProductionTests
     [Fact]
     public async Task DisabledLocalJwtKeepsEndpointsUnmappedAndProtectedProductsChallenged()
     {
-        using var settings = new EnvironmentSettings(disableLocalJwt: true);
-        await using var factory = CreateFactory();
+        await using var factory = CreateFactory(disableLocalJwt: true);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var missing = await client.PostAsJsonAsync("/auth/login", new { Email = "unused", Password = "unused" });
         await Check(missing, HttpStatusCode.NotFound, "resource.not_found");
@@ -122,7 +118,6 @@ public sealed class ProblemDetailsProductionTests
     [Fact]
     public async Task ProductionErrorsUseOneContractAndPreserveSecurityAndHeaders()
     {
-        using var settings = new EnvironmentSettings();
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var scope = factory.Services.CreateScope();
@@ -212,9 +207,16 @@ public sealed class ProblemDetailsProductionTests
         }
     }
 
-    private static WebApplicationFactory<Program> CreateFactory() => new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+    private static WebApplicationFactory<Program> CreateFactory(bool disableLocalJwt = false) => new TestWebApplicationFactory("Production", new Dictionary<string, string?>
     {
-        builder.UseEnvironment("Production");
+        ["Database:AllowEphemeralInProduction"] = "true",
+        ["RateLimiting:Policies:auth.login:PermitLimit"] = "2",
+        ["Auth:Schemes:LocalJwt:Enabled"] = (!disableLocalJwt).ToString(),
+        ["Auth:Schemes:Oidc:Enabled"] = disableLocalJwt.ToString(),
+        ["Auth:Schemes:Oidc:Authority"] = "https://identity.test",
+        ["Auth:Schemes:Oidc:Audience"] = "test-api"
+    }).WithWebHostBuilder(builder =>
+    {
         builder.ConfigureServices(services =>
         {
             services.Replace(ServiceDescriptor.Scoped<IProductQueries, InjectedReads>());
@@ -262,40 +264,4 @@ public sealed class ProblemDetailsProductionTests
         };
     }
 
-    private sealed class EnvironmentSettings : IDisposable
-    {
-        private readonly Dictionary<string, string?> _previous = new();
-
-        public EnvironmentSettings(bool disableLocalJwt = false)
-        {
-            Set("DatabaseProvider", "SqliteInMemory");
-            Set("Database__AllowEphemeralInProduction", "true");
-            Set("ConnectionStrings__DefaultConnection", $"Data Source=problems-{Guid.NewGuid():N};Mode=Memory;Cache=Shared");
-            Set("Auth__Schemes__LocalJwt__SigningKey", "production-test-signing-key-1234567890");
-            Set("IdentitySeed__AdminPassword", "ChangeMe_UseUserSecrets!123");
-            Set("Auth__RefreshTokenCleanup__Enabled", "false");
-            Set("OpenTelemetry__Traces__Enabled", "false");
-            Set("OpenTelemetry__Metrics__Enabled", "false");
-            Set("RateLimiting__Policies__auth.login__PermitLimit", "2");
-            if (disableLocalJwt)
-            {
-                Set("Auth__Schemes__LocalJwt__Enabled", "false");
-                Set("Auth__Schemes__Oidc__Enabled", "true");
-                Set("Auth__Schemes__Oidc__Authority", "https://identity.test");
-                Set("Auth__Schemes__Oidc__Audience", "test-api");
-            }
-        }
-
-        private void Set(string name, string value)
-        {
-            _previous.Add(name, Environment.GetEnvironmentVariable(name));
-            Environment.SetEnvironmentVariable(name, value);
-        }
-
-        public void Dispose()
-        {
-            foreach (var (name, value) in _previous)
-                Environment.SetEnvironmentVariable(name, value);
-        }
-    }
 }

@@ -7,6 +7,9 @@ metadata:
   stack: dotnet-clean-architecture
 ---
 
+CI policy: use the exact SDK in global.json, keep package locks current and restore in locked mode. Keep global formatting/line-ending checks, dependency audits and source-secret scans failing closed. Never silently lower coverage thresholds or exclude critical code to pass CI; review scripts/ci/coverage-thresholds.json and docs/testing/ci.md. The required GitHub check is CI required; branch protection is configured separately.
+
+
 ## Purpose
 Preserve the observability and privacy boundaries in `docs/observability/operations.md`: no secrets or direct PII, low-cardinality metrics, HTTP-only trace minimization and no claim that best-effort EF privilege audit covers every source.
 
@@ -18,7 +21,7 @@ Preserve IP-only per-process limiting after trusted forwarded headers and before
 
 Create a new feature use case with consistent structure across Application, Api, and tests.
 
-Real infrastructure tests are opt-in in Release using `-p:RunInfrastructureReal=true --filter Category=InfrastructureReal`; Docker failures are not skips. See `test/CleanTemplate.Infrastructure.RealTests/README.md` for HTTP acceptance scope and serialized host startup. Do not claim legacy factories all use Testing; their migration is T29. The isolated cleanup shutdown test is tagged `ShutdownCleanupIsolated`.
+Real infrastructure tests are opt-in in Release using `-p:RunInfrastructureReal=true --filter Category=InfrastructureReal`; Docker failures are not skips. See `test/CleanTemplate.Infrastructure.RealTests/README.md` for HTTP acceptance scope and serialized host startup. HTTP host fixtures default to Testing with isolated in-memory configuration, database names and JWT keys. Use explicit Development for documentation and Production for production behavior. Pass startup overrides to the factory before Program executes; never mutate runner process environment. See docs/testing/acceptance.md. The isolated cleanup shutdown test is tagged `ShutdownCleanupIsolated`.
 
 This skill is intentionally opinionated: it prioritizes practical consistency over strict architecture purism.
 

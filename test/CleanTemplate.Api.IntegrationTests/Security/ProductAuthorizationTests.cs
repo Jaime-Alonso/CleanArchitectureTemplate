@@ -6,7 +6,6 @@ using CleanTemplate.Application.Contracts.Identity;
 using CleanTemplate.Application.Security;
 using CleanTemplate.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CleanTemplate.Api.IntegrationTests.Security;
@@ -17,15 +16,7 @@ public sealed class ProductAuthorizationTests
     [Fact]
     public async Task CreatedProductIsImmediatelyReadableOnPrimaryAndExtremePageIsEmpty()
     {
-        using var baseFactory = new TestWebApplicationFactory();
-        var database = $"Data Source=product-read-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
-        using var factory = baseFactory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:DefaultConnection"] = database,
-                ["OpenTelemetry:Traces:Enabled"] = "false",
-                ["OpenTelemetry:Metrics:Enabled"] = "false"
-            })));
+        using var factory = new TestWebApplicationFactory();
         using var client = factory.CreateClient();
         using var scope = factory.Services.CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -49,16 +40,7 @@ public sealed class ProductAuthorizationTests
     [Fact]
     public async Task UserCanReadButCannotCreateUpdateOrDeleteProducts()
     {
-        using var baseFactory = new TestWebApplicationFactory();
-        var database = $"Data Source=product-authorization-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
-        using var factory = baseFactory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:DefaultConnection"] = database,
-                ["ConnectionStrings:ReadConnection"] = database,
-                ["OpenTelemetry:Traces:Enabled"] = "false",
-                ["OpenTelemetry:Metrics:Enabled"] = "false"
-            })));
+        using var factory = new TestWebApplicationFactory();
         using var client = factory.CreateClient();
         using var scope = factory.Services.CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

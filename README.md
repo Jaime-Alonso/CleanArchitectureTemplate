@@ -181,11 +181,17 @@ Visually, this ordering reinforces the architectural message:
 
 The declared dependency matrix and essential build conventions are checked by `CleanTemplate.ArchitectureTests`, including conditional and unused project references. Run it with `dotnet test test/CleanTemplate.ArchitectureTests/CleanTemplate.ArchitectureTests.csproj`. See [ADR-0001](docs/adr/0001-data-access-and-dependencies.md) for the decision and verification limits.
 
-Real SQL Server, PostgreSQL and Redis tests are opt-in and require Docker: `dotnet test test/CleanTemplate.Infrastructure.RealTests/CleanTemplate.Infrastructure.RealTests.csproj -c Release -p:RunInfrastructureReal=true --filter Category=InfrastructureReal`. Docker failures are test failures, not skips; see [the real-test guide](test/CleanTemplate.Infrastructure.RealTests/README.md) for isolation and HTTP acceptance scope. Existing legacy integration factories are not all Testing; their migration is T29. The isolated cleanup shutdown test is labeled `ShutdownCleanupIsolated`.
+Real SQL Server, PostgreSQL and Redis tests are opt-in and require Docker: `dotnet test test/CleanTemplate.Infrastructure.RealTests/CleanTemplate.Infrastructure.RealTests.csproj -c Release -p:RunInfrastructureReal=true --filter Category=InfrastructureReal`. Docker failures are test failures, not skips; see [the real-test guide](test/CleanTemplate.Infrastructure.RealTests/README.md) for isolation and HTTP acceptance scope. HTTP host fixtures use isolated in-memory configuration, database names and JWT keys; Testing is the default, Development is explicit for documentation, and Production is exercised separately. See [negative and Production acceptance](docs/testing/acceptance.md) for scenario coverage and limits. The isolated cleanup shutdown test is labeled `ShutdownCleanupIsolated`.
+
+## Continuous integration
+
+The quality chain validates Release on Windows and Linux, runs the opt-in SQL Server/PostgreSQL/Redis tests, audits direct/transitive dependencies and scans source for secrets. A GitHub Actions workflow is prepared for optional manual use only; T-30 acceptance is local and does not require GitHub execution or branch protection. The SDK is pinned in `global.json`; dependency locks and immutable action/tool references keep updates reviewable. Coverage reports and TRX results are uploaded, with measured regression floors for critical code. Run `pwsh -NoProfile -File scripts/ci/Invoke-Quality.ps1` locally. See [CI, coverage policy and reproduction](docs/testing/ci.md) for prerequisites, limits and the separate GitHub branch-protection setup requiring **CI required**.
 
 ## Requirements
 
-- .NET SDK installed
+- .NET SDK 10.0.403 (the exact version in `global.json`)
+- PowerShell 7 for the quality and maintenance scripts
+- Docker Linux for source-security checks and opt-in real infrastructure tests
 - (Optional) Visual Studio 2026 or later
 
 ---
@@ -237,6 +243,14 @@ Rules:
 It must remain lightweight and framework-agnostic.
 
 If you only need a small helper, keep it minimal and avoid adding unnecessary complexity to this module.
+
+#### Entity identifiers (UUID v7)
+
+The default constructor of [`Entity`](src/CleanTemplate.SharedKernel/Entities/Entity.cs) assigns `Guid.CreateVersion7()`, so new entities have an identifier before persistence. Unlike the random UUID v4 produced by `Guid.NewGuid()`, UUID v7 combines a millisecond timestamp with random bits while retaining the same 16-byte size. It can improve index locality compared with random UUIDs when the database ordering matches UUID v7, as in PostgreSQL. It does not guarantee strict creation order within a millisecond or across clock adjustments, and exposes the approximate generation time; use an explicit timestamp property when creation time is part of the application contract. See [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html).
+
+**SQL Server caveat:** `uniqueidentifier` uses a different byte ordering, so UUID v7 is not sequential under SQL Server ordering and should not be assumed to reduce index fragmentation there. EF Core's SQL Server provider offers sequential GUID generation, but it does not replace the non-empty ID already assigned by `Entity`. See [SQL Server GUID comparisons](https://learn.microsoft.com/en-us/sql/connect/ado-net/sql/compare-guid-uniqueidentifier-values) and [EF Core SQL Server value generation](https://learn.microsoft.com/en-us/ef/core/providers/sql-server/value-generation).
+
+UUID v7 is the template's general default, not a universal performance optimum. For a SQL Server deployment with substantial write volume, measure the actual workload and consider a provider-specific sequential GUID strategy in Infrastructure. A numeric identity/sequence can provide smaller keys and indexes if coordinated ID generation is acceptable; a numeric internal key plus a public UUID adds another mapping and unique index. Changing generation must account for entity identity before persistence and existing API/database contracts. Keep provider-specific dependencies out of SharedKernel and Domain.
 
 ---
 

@@ -1,5 +1,5 @@
-using Mediora;
 using CleanTemplate.SharedKernel.Results;
+using Mediora;
 
 namespace CleanTemplate.Application.Products.Queries.GetProductById;
 

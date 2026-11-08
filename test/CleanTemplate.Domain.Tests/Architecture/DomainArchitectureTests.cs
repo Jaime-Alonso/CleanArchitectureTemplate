@@ -1,4 +1,3 @@
-using System.Linq;
 using CleanTemplate.Domain.Entities;
 using CleanTemplate.SharedKernel.Results;
 

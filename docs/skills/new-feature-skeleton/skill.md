@@ -1,5 +1,7 @@
 # Skill: New Feature Skeleton (Opinionated)
 
+CI policy: use the exact SDK in global.json, keep package locks current and restore in locked mode. Keep global formatting/line-ending checks, dependency audits and source-secret scans failing closed. Never silently lower coverage thresholds or exclude critical code to pass CI; review scripts/ci/coverage-thresholds.json and docs/testing/ci.md. The required GitHub check is CI required; branch protection is configured separately.
+
 For every endpoint, describe actual HTTP success/error responses, security, required fields and shared limits in OpenAPI without transport annotations on Application. Extend curated contract tests and exercise the generated-client smoke when the contract changes; keep document/UI mappings Development-only.
 
 Canonical OpenCode file: `.opencode/skills/new-feature-skeleton/SKILL.md`
@@ -15,7 +17,7 @@ Preserve IP-only per-process limiting after trusted forwarded headers and before
 
 Create a new feature use case with consistent structure across Application, Api, and tests.
 
-Real infrastructure tests are opt-in in Release using `-p:RunInfrastructureReal=true --filter Category=InfrastructureReal`; Docker failures are not skips. See `test/CleanTemplate.Infrastructure.RealTests/README.md` for HTTP acceptance scope and serialized host startup. Do not claim legacy factories all use Testing; their migration is T29. The isolated cleanup shutdown test is tagged `ShutdownCleanupIsolated`.
+Real infrastructure tests are opt-in in Release using `-p:RunInfrastructureReal=true --filter Category=InfrastructureReal`; Docker failures are not skips. See `test/CleanTemplate.Infrastructure.RealTests/README.md` for HTTP acceptance scope and serialized host startup. HTTP host fixtures default to Testing with isolated in-memory configuration, database names and JWT keys. Use explicit Development for documentation and Production for production behavior. Pass startup overrides to the factory before Program executes; never mutate runner process environment. See docs/testing/acceptance.md. The isolated cleanup shutdown test is tagged `ShutdownCleanupIsolated`.
 
 This skill is intentionally opinionated: it prioritizes practical consistency over strict architecture purism.
 

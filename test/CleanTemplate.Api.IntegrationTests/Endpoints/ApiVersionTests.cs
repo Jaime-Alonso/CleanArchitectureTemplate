@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CleanTemplate.Api.IntegrationTests.Endpoints;
 
 [Collection(HostIntegrationCollection.Name)]
-public sealed class ApiVersionTests(TestWebApplicationFactory factory) : IClassFixture<TestWebApplicationFactory>
+public sealed class ApiVersionTests(DevelopmentWebApplicationFactory factory) : IClassFixture<DevelopmentWebApplicationFactory>
 {
     [Theory]
     [InlineData(Microsoft.OpenApi.OpenApiSpecVersion.OpenApi3_0)]

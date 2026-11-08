@@ -1,14 +1,9 @@
 using System.Diagnostics;
 using System.Net;
-using System.Text.Json;
-using Asp.Versioning;
 using CleanTemplate.Api.IntegrationTests.Infrastructure;
 using CleanTemplate.Host.Extensions;
 using CleanTemplate.Host.Health;
 using CleanTemplate.Infrastructure.Database;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
@@ -25,35 +20,21 @@ public sealed class HealthTests(TestWebApplicationFactory factory) : IClassFixtu
     [Fact]
     public async Task SaturatedGlobalLimiter_DoesNotLimitProbes()
     {
-        var oldPermit = Environment.GetEnvironmentVariable("RateLimiting__Global__PermitLimit");
-        var oldWindow = Environment.GetEnvironmentVariable("RateLimiting__Global__WindowSeconds");
-        Environment.SetEnvironmentVariable("RateLimiting__Global__PermitLimit", "1");
-        Environment.SetEnvironmentVariable("RateLimiting__Global__WindowSeconds", "300");
-        try
+        using var host = new TestWebApplicationFactory("Testing", new Dictionary<string, string?>
         {
-            using var host = factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["RateLimiting:Global:PermitLimit"] = "1",
-                    ["RateLimiting:Global:WindowSeconds"] = "300",
-                    ["RateLimiting:Global:QueueLimit"] = "0"
-                })));
-            using var client = host.CreateClient();
-            using var first = await client.GetAsync("/api/products/");
-            Assert.NotEqual(HttpStatusCode.TooManyRequests, first.StatusCode);
-            using var rejected = await client.GetAsync("/api/products/");
-            Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
-            foreach (var path in new[] { "/health/live", "/health/ready", "/health" })
-            {
-                using var response = await client.GetAsync(path);
-                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-                Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
-            }
-        }
-        finally
+            ["RateLimiting:Global:PermitLimit"] = "1",
+            ["RateLimiting:Global:WindowSeconds"] = "300"
+        });
+        using var client = host.CreateClient();
+        using var first = await client.GetAsync("/api/products/");
+        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
+        using var rejected = await client.GetAsync("/api/products/");
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        foreach (var path in new[] { "/health/live", "/health/ready", "/health" })
         {
-            Environment.SetEnvironmentVariable("RateLimiting__Global__PermitLimit", oldPermit);
-            Environment.SetEnvironmentVariable("RateLimiting__Global__WindowSeconds", oldWindow);
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
         }
     }
 
@@ -155,30 +136,6 @@ public sealed class HealthTests(TestWebApplicationFactory factory) : IClassFixtu
             Assert.Equal(live ? "Healthy" : "Unhealthy", await response.Content.ReadAsStringAsync());
             Assert.True(response.Headers.CacheControl?.NoStore);
         }
-    }
-
-    [Fact]
-    public async Task HealthyEndpoints_AreExcludedFromOpenApi()
-    {
-        using var client = factory.CreateClient();
-        foreach (var path in new[] { "/health/live", "/health/ready", "/health" })
-        {
-            using var response = await client.GetAsync(path);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
-        }
-        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
-        Assert.DoesNotContain(document.RootElement.GetProperty("paths").EnumerateObject(), path => path.Name.StartsWith("/health", StringComparison.Ordinal));
-        var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
-            .Where(endpoint => endpoint.RoutePattern.RawText?.StartsWith("/health", StringComparison.Ordinal) == true).ToArray();
-        Assert.Equal(3, endpoints.Length);
-        Assert.All(endpoints, endpoint =>
-        {
-            Assert.NotNull(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
-            Assert.NotNull(endpoint.Metadata.GetMetadata<DisableRateLimitingAttribute>());
-            Assert.True(endpoint.Metadata.GetMetadata<IExcludeFromDescriptionMetadata>()?.ExcludeFromDescription);
-            Assert.NotNull(endpoint.Metadata.GetMetadata<ApiVersionNeutralAttribute>());
-        });
     }
 
     [Fact]

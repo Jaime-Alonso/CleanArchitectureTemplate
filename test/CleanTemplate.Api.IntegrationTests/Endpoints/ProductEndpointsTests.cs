@@ -10,60 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CleanTemplate.Api.IntegrationTests.Endpoints;
 
 [Collection(HostIntegrationCollection.Name)]
-public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplicationFactory>
+public sealed class ProductEndpointsTests(TestWebApplicationFactory factory) : EndpointTestBase(factory), IClassFixture<TestWebApplicationFactory>
 {
-    private const string SeedAdminPassword = "ChangeMe_UseUserSecrets!123";
-
-    private readonly TestWebApplicationFactory _factory;
-
-    public AuthAndProductsEndpointsTests(TestWebApplicationFactory factory)
-    {
-        _factory = factory;
-    }
-
-    [Fact]
-    public async Task Login_WithSeededAdminCredentials_ReturnsAccessAndRefreshTokens()
-    {
-        using var client = CreateClient("198.51.100.10");
-
-        var response = await client.PostAsJsonAsync("/auth/login", new
-        {
-            Email = "admin@local.template",
-            Password = SeedAdminPassword
-        });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        var payload = await response.Content.ReadFromJsonAsync<LoginResponse>();
-        Assert.NotNull(payload);
-        Assert.False(string.IsNullOrWhiteSpace(payload.AccessToken));
-        Assert.False(string.IsNullOrWhiteSpace(payload.RefreshToken));
-        Assert.Equal("Bearer", payload.TokenType);
-    }
-
-    [Fact]
-    public async Task GetOpenApi_ForApiVersion_ReturnsMatchingDocument()
-    {
-        using var client = CreateClient("198.51.100.20");
-        using var response = await client.GetAsync("/openapi/v1.json");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>();
-        Assert.NotNull(document);
-        Assert.Equal("v1", document.RootElement.GetProperty("info").GetProperty("version").GetString());
-        Assert.NotEmpty(document.RootElement.GetProperty("paths").EnumerateObject());
-    }
-
-    [Fact]
-    public async Task GetOpenApi_ForUnregisteredApiVersion_ReturnsNotFound()
-    {
-        using var client = CreateClient("198.51.100.21");
-        using var response = await client.GetAsync("/openapi/v2.json");
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
     [Fact]
     public async Task GetProducts_WithoutToken_ReturnsUnauthorized()
     {
@@ -96,85 +44,6 @@ public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplica
     }
 
     [Fact]
-    public async Task Refresh_WithValidRefreshToken_ReturnsNewTokens()
-    {
-        using var client = CreateClient("198.51.100.13");
-        var login = await LoginAsync(client);
-
-        var refreshResponse = await client.PostAsJsonAsync("/auth/refresh", new
-        {
-            RefreshToken = login.RefreshToken
-        });
-
-        Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
-
-        var refreshPayload = await refreshResponse.Content.ReadFromJsonAsync<LoginResponse>();
-        Assert.NotNull(refreshPayload);
-        Assert.False(string.IsNullOrWhiteSpace(refreshPayload.AccessToken));
-        Assert.False(string.IsNullOrWhiteSpace(refreshPayload.RefreshToken));
-        Assert.NotEqual(login.RefreshToken, refreshPayload.RefreshToken);
-    }
-
-    [Fact]
-    public async Task Refresh_WithConsumedToken_ReturnsUnauthorizedAndRevokesReplacement()
-    {
-        using var client = CreateClient("198.51.100.16");
-        var login = await LoginAsync(client);
-        using var first = await client.PostAsJsonAsync("/auth/refresh", new { login.RefreshToken });
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        var replacement = await first.Content.ReadFromJsonAsync<LoginResponse>();
-        Assert.NotNull(replacement);
-
-        using var replay = await client.PostAsJsonAsync("/auth/refresh", new { login.RefreshToken });
-        Assert.Equal(HttpStatusCode.Unauthorized, replay.StatusCode);
-
-        // A replay revokes the entire family, including the already-issued replacement.
-        using var next = await client.PostAsJsonAsync("/auth/refresh", new { replacement.RefreshToken });
-        Assert.Equal(HttpStatusCode.Unauthorized, next.StatusCode);
-    }
-
-    [Fact]
-    public async Task Logout_WithRefreshToken_RevokesToken()
-    {
-        using var client = CreateClient("198.51.100.14");
-        var login = await LoginAsync(client);
-
-        var logoutResponse = await client.PostAsJsonAsync("/auth/logout", new
-        {
-            RefreshToken = login.RefreshToken
-        });
-
-        Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
-
-        var refreshResponse = await client.PostAsJsonAsync("/auth/refresh", new
-        {
-            RefreshToken = login.RefreshToken
-        });
-
-        Assert.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
-    }
-
-    [Fact]
-    public async Task Logout_WithConsumedAncestor_RevokesDescendantButNotIssuedAccessToken()
-    {
-        using var client = CreateClient("198.51.100.17");
-        var login = await LoginAsync(client);
-        using var refresh = await client.PostAsJsonAsync("/auth/refresh", new { login.RefreshToken });
-        Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
-        var child = await refresh.Content.ReadFromJsonAsync<LoginResponse>();
-        Assert.NotNull(child);
-
-        using var logout = await client.PostAsJsonAsync("/auth/logout", new { login.RefreshToken });
-        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
-        using var rejected = await client.PostAsJsonAsync("/auth/refresh", new { child.RefreshToken });
-        Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
-
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", child.AccessToken);
-        using var products = await client.GetAsync("/api/products?page=1&pageSize=10");
-        Assert.Equal(HttpStatusCode.OK, products.StatusCode);
-    }
-
-    [Fact]
     public async Task Products_InvalidValuesReturnBadRequestWithoutChangingStoredProduct()
     {
         using var client = CreateClient("198.51.100.89");
@@ -187,7 +56,7 @@ public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplica
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         var id = (await create.Content.ReadFromJsonAsync<CreatedProductResponse>())!.Id;
         var url = $"/api/products/{id}";
-        using var scope = _factory.Services.CreateScope();
+        using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var count = await db.Set<CleanTemplate.Domain.Entities.Product>().CountAsync();
         foreach (var (text, price, stock) in new[]
@@ -298,57 +167,4 @@ public sealed class AuthAndProductsEndpointsTests : IClassFixture<TestWebApplica
         Assert.Equal(version1 + 1, product.GetProperty("version").GetInt64());
     }
 
-    [Fact]
-    public async Task Login_WhenRateLimitExceeded_ReturnsTooManyRequests()
-    {
-        using var client = CreateClient("198.51.100.42");
-
-        HttpStatusCode lastStatusCode = HttpStatusCode.OK;
-        for (var i = 0; i < 12; i++)
-        {
-            var response = await client.PostAsJsonAsync("/auth/login", new
-            {
-                Email = "admin@local.template",
-                Password = SeedAdminPassword
-            });
-
-            lastStatusCode = response.StatusCode;
-        }
-
-        Assert.Equal(HttpStatusCode.TooManyRequests, lastStatusCode);
-    }
-
-    private static async Task<LoginResponse> LoginAsync(HttpClient client)
-    {
-        var loginResponse = await client.PostAsJsonAsync("/auth/login", new
-        {
-            Email = "admin@local.template",
-            Password = SeedAdminPassword
-        });
-
-        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
-
-        var payload = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
-        Assert.NotNull(payload);
-        return payload;
-    }
-
-    private HttpClient CreateClient(string forwardedFor)
-    {
-        var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Forwarded-For", forwardedFor);
-        return client;
-    }
-
-    private sealed record CreatedProductResponse
-    {
-        public Guid Id { get; init; }
-    }
-
-    private sealed record LoginResponse
-    {
-        public string AccessToken { get; init; } = string.Empty;
-        public string RefreshToken { get; init; } = string.Empty;
-        public string TokenType { get; init; } = string.Empty;
-    }
 }

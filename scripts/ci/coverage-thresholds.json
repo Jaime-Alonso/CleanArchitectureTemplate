@@ -1,0 +1,16 @@
+{
+  "ordinary": {
+    "lines": 85,
+    "branches": 70,
+    "classes": [
+      { "name": "CleanTemplate.Api.Security.Extensions.AuthServiceCollectionExtensions", "lines": 95, "branches": 75 },
+      { "name": "CleanTemplate.Api.Security.Options.AuthOptionsValidator", "lines": 85, "branches": 85 },
+      { "name": "CleanTemplate.Api.Security.ProvisioningClaimsTransformation", "lines": 95, "branches": 75 },
+      { "name": "CleanTemplate.Application.Behaviors.ValidationBehavior`2", "lines": 95, "branches": 95 },
+      { "name": "CleanTemplate.Domain.Entities.Product", "lines": 95, "branches": 95 },
+      { "name": "CleanTemplate.Infrastructure.Security.ExternalIdentityProvisioningService", "lines": 95, "branches": 75 },
+      { "name": "CleanTemplate.Infrastructure.Security.RefreshTokenService", "lines": 95, "branches": 85 },
+      { "name": "CleanTemplate.Infrastructure.Security.UserAuthorizationService", "lines": 95, "branches": 95 }
+    ]
+  }
+}
